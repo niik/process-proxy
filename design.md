@@ -83,7 +83,7 @@ Represents a connection to a single instance of the native executable. Created a
 Represents a connection to a single instance of the native executable. Created automatically by `createProxyProcessServer` when a native process connects.
 
 Methods:
-- `on(event: 'disconnect', listener: () => void)`: Registers an event listener for disconnection events
+- `on(event: 'close', listener: () => void)`: Registers an event listener for connection close events
 - `on(event: 'error', listener: (error: Error) => void)`: Registers an event listener for error events
 - `sendCommand(command: number, payload?: Buffer): Promise<Buffer>`: Sends a command to the executable and returns a promise that resolves with the response. The sendCommand will maintain an internal queue of commands to ensure that only one command is in-flight at a time.
 - `getArgs(): Promise<string[]>`: Retrieves the command line arguments of the executable

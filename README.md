@@ -55,8 +55,8 @@ const server = createProxyProcessServer((connection) => {
     console.log('Received from stdin:', data.toString());
   });
   
-  // Handle disconnection
-  connection.on('disconnect', () => {
+  // Handle connection close
+  connection.on('close', () => {
     console.log('Process disconnected');
   });
 });
@@ -190,7 +190,7 @@ Represents a connection to a single instance of the native executable.
 
 #### Events
 
-- `disconnect` - Emitted when the connection is closed
+- `close` - Emitted when the connection is closed
 - `error` - Emitted when an error occurs. Listener signature: `(error: Error) => void`
 
 ## Native Executable
@@ -220,7 +220,7 @@ The TCP server only listens on localhost (127.0.0.1), but this does not provide 
 1. **Generate a secret token** and pass it to the native executable via an environment variable
 2. **Verify the token** on connection using `ProcessProxy.getEnv()` before allowing any further commands
 3. **Use process isolation** techniques appropriate for your operating system
-4. **Monitor connections** and disconnect unauthorized clients immediately
+4. **Monitor connections** and close unauthorized clients immediately
 
 Example security implementation:
 

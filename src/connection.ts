@@ -201,7 +201,7 @@ export class ProcessProxyConnection extends EventEmitter {
     }
     this.commandQueue = [];
 
-    this.emit('disconnect');
+    this.emit('close');
   }
 
   private handleError(error: Error): void {
