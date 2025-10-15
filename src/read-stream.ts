@@ -5,15 +5,12 @@ const CMD_READ_STDIN = 0x02;
 const CMD_CLOSE_STDIN = 0x09;
 
 export class ReadStream extends Readable {
-  private connection: ProcessProxyConnection;
   private polling: boolean = false;
-  private pollingInterval: number;
+  public pollingInterval = 100;
   private pollingTimer?: NodeJS.Timeout;
 
-  constructor(connection: ProcessProxyConnection, pollingInterval: number = 100) {
+  constructor(private readonly connection: ProcessProxyConnection) {
     super();
-    this.connection = connection;
-    this.pollingInterval = pollingInterval;
   }
 
   _read(size: number): void {

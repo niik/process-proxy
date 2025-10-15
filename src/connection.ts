@@ -23,7 +23,6 @@ interface QueuedCommand {
 }
 
 export class ProcessProxyConnection extends EventEmitter {
-  private socket: Socket;
   private commandQueue: QueuedCommand[] = [];
   private processingQueue: boolean = false;
   private receiveBuffer: Buffer = Buffer.allocUnsafe(0);
@@ -34,10 +33,9 @@ export class ProcessProxyConnection extends EventEmitter {
   public readonly stdout: WriteStream;
   public readonly stderr: WriteStream;
 
-  constructor(socket: Socket, stdinPollingInterval: number = 100) {
+  constructor(private readonly socket: Socket) {
     super();
-    this.socket = socket;
-    this.stdin = new ReadStream(this, stdinPollingInterval);
+    this.stdin = new ReadStream(this);
     this.stdout = new WriteStream(this, CMD_WRITE_STDOUT, CMD_CLOSE_STDOUT);
     this.stderr = new WriteStream(this, CMD_WRITE_STDERR, CMD_CLOSE_STDERR);
 
