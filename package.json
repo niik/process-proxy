@@ -1,15 +1,47 @@
 {
   "name": "process-proxy",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A modern npm package that enables developers to interact with a native executable, reading its stdin, writing to its stdout, and stderr streams",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
+    "install": "node-gyp rebuild",
+    "build": "npm run build:native && npm run build:ts",
+    "build:native": "node-gyp rebuild",
+    "build:ts": "tsc",
+    "clean": "rm -rf dist build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "process",
+    "proxy",
+    "stdin",
+    "stdout",
+    "stderr",
+    "native",
+    "executable"
+  ],
   "author": "Markus Olsson <j.markus.olsson@gmail.com>",
   "license": "MIT",
   "engines": {
     "node": ">=22"
-  }
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "node-gyp": "^11.4.2",
+    "typescript": "^5.9.3"
+  },
+  "files": [
+    "dist",
+    "build/Release",
+    "native",
+    "binding.gyp"
+  ]
 }
