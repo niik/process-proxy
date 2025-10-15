@@ -2,6 +2,22 @@ import { EventEmitter } from 'events';
 import { createServer, Server, Socket } from 'net';
 import { ProcessProxyConnection } from './ProcessProxyConnection.js';
 
+interface ProcessProxyServerEvents {
+  connection: (connection: ProcessProxyConnection) => void;
+}
+
+export declare interface ProcessProxyServer {
+  on<U extends keyof ProcessProxyServerEvents>(
+    event: U,
+    listener: ProcessProxyServerEvents[U]
+  ): this;
+
+  emit<U extends keyof ProcessProxyServerEvents>(
+    event: U,
+    ...args: Parameters<ProcessProxyServerEvents[U]>
+  ): boolean;
+}
+
 export class ProcessProxyServer extends EventEmitter {
   private server: Server | null = null;
   private port: number = 0;
