@@ -131,7 +131,7 @@ Returns the absolute path to the native proxy executable.
 import { getProxyCommandPath } from 'process-proxy';
 
 const executablePath = getProxyCommandPath();
-// Returns: '/path/to/build/Release/process-proxy-native' (or .exe on Windows)
+// Returns: '/path/to/build/Release/process-proxy' (or .exe on Windows)
 ```
 
 This utility function automatically:
@@ -189,7 +189,7 @@ The native executable is built automatically when running `npm run build` or `np
 The native executable must be launched with the `PROCESS_PROXY_PORT` environment variable set:
 
 ```bash
-PROCESS_PROXY_PORT=12345 ./build/Release/process-proxy-native [args...]
+PROCESS_PROXY_PORT=12345 ./build/Release/process-proxy [args...]
 ```
 
 ## Security

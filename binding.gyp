@@ -1,7 +1,7 @@
 {
   "targets": [
     {
-      "target_name": "process-proxy-native",
+      "target_name": "process-proxy",
       "type": "executable",
       "sources": [
         "native/main.c"

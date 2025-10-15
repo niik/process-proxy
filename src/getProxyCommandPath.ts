@@ -6,7 +6,7 @@ import { platform } from 'os';
  * Returns the absolute path to the native proxy executable.
  * Automatically adds the .exe suffix on Windows.
  * 
- * @returns The absolute path to the process-proxy-native executable
+ * @returns The absolute path to the process-proxy executable
  */
 export function getProxyCommandPath(): string {
   // Get the directory of this module
@@ -16,8 +16,8 @@ export function getProxyCommandPath(): string {
   
   // Navigate from dist/ to the project root, then to build/Release/
   const executableName = platform() === 'win32' 
-    ? 'process-proxy-native.exe' 
-    : 'process-proxy-native';
+    ? 'process-proxy.exe' 
+    : 'process-proxy';
   
   return join(moduleDir, '..', 'build', 'Release', executableName);
 }
