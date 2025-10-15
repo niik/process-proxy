@@ -1,10 +1,5 @@
-import { ProcessProxyServer } from '../dist/index.js';
+import { ProcessProxyServer, getProxyCommandPath } from '../dist/index.js';
 import { spawn } from 'child_process';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 async function main() {
   // Create and start the server
@@ -63,7 +58,7 @@ async function main() {
   });
 
   // Launch the native executable
-  const nativeExe = join(__dirname, '..', 'build', 'Release', 'process-proxy-native');
+  const nativeExe = getProxyCommandPath();
   
   const child = spawn(nativeExe, ['test'], {
     env: {

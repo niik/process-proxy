@@ -34,7 +34,7 @@ This will compile both the TypeScript library and the native C executable.
 ### Basic Example
 
 ```typescript
-import { ProcessProxyServer } from 'process-proxy';
+import { ProcessProxyServer, getProxyCommandPath } from 'process-proxy';
 import { spawn } from 'child_process';
 
 // Create and start the server
@@ -71,7 +71,7 @@ server.on('connection', async (connection) => {
 });
 
 // Launch the native executable with the port in environment
-const nativeExe = './build/Release/process-proxy-native';
+const nativeExe = getProxyCommandPath();
 const child = spawn(nativeExe, ['arg1', 'arg2'], {
   env: {
     ...process.env,
@@ -122,6 +122,22 @@ server.on('connection', async (connection) => {
 ```
 
 ## API
+
+### getProxyCommandPath()
+
+Returns the absolute path to the native proxy executable.
+
+```typescript
+import { getProxyCommandPath } from 'process-proxy';
+
+const executablePath = getProxyCommandPath();
+// Returns: '/path/to/build/Release/process-proxy-native' (or .exe on Windows)
+```
+
+This utility function automatically:
+- Resolves the correct path relative to the installed package
+- Adds the `.exe` suffix on Windows
+- Works regardless of where the package is installed
 
 ### ProcessProxyServer
 
