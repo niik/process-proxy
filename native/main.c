@@ -129,7 +129,9 @@ static void get_error_message(char* buffer, size_t buffer_size) {
         snprintf(buffer, buffer_size, "Error code: %lu", error);
     }
     
-    LocalFree(message_buffer);
+    if (message_buffer != NULL) {
+        LocalFree(message_buffer);
+    }
 #else
     int error = errno;
     if (error == 0) {
