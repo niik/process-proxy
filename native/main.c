@@ -75,8 +75,84 @@ static int read_full(socket_t sock, void* buf, size_t len) {
     return 0;
 }
 
+// Helper function to send success response
+static int send_success(socket_t sock) {
+    int32_t status = 0;
+    return write_full(sock, &status, sizeof(status));
+}
+
+// Helper function to send error response
+static int send_error(socket_t sock, const char* error_msg) {
+    int32_t status = -1;
+    
+    // Send status code
+    if (write_full(sock, &status, sizeof(status)) < 0) {
+        return -1;
+    }
+    
+    // Send error message length and message
+    uint32_t msg_len = (uint32_t)strlen(error_msg);
+    if (write_full(sock, &msg_len, sizeof(msg_len)) < 0) {
+        return -1;
+    }
+    
+    return write_full(sock, error_msg, msg_len);
+}
+
+// Helper function to get platform-specific error message
+static void get_error_message(char* buffer, size_t buffer_size) {
+#ifdef _WIN32
+    DWORD error = GetLastError();
+    if (error == 0) {
+        snprintf(buffer, buffer_size, "Command failed");
+        return;
+    }
+    
+    LPSTR message_buffer = NULL;
+    size_t size = FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        error,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&message_buffer,
+        0,
+        NULL
+    );
+    
+    if (size > 0) {
+        snprintf(buffer, buffer_size, "%s", message_buffer);
+        // Remove trailing newlines
+        while (size > 0 && (buffer[size-1] == '\r' || buffer[size-1] == '\n')) {
+            buffer[--size] = '\0';
+        }
+    } else {
+        snprintf(buffer, buffer_size, "Error code: %lu", error);
+    }
+    
+    LocalFree(message_buffer);
+#else
+    int error = errno;
+    if (error == 0) {
+        snprintf(buffer, buffer_size, "Command failed");
+        return;
+    }
+    
+    const char* msg = strerror(error);
+    if (msg) {
+        snprintf(buffer, buffer_size, "%s", msg);
+    } else {
+        snprintf(buffer, buffer_size, "Error code: %d", error);
+    }
+#endif
+}
+
 // Command handlers
 static int handle_get_args(socket_t sock) {
+    // Send success status
+    if (send_success(sock) < 0) {
+        return -1;
+    }
+    
     uint32_t count = (uint32_t)g_argc;
     
     // Send count
@@ -107,6 +183,10 @@ static int handle_read_stdin(socket_t sock) {
     }
     
     if (max_bytes <= 0) {
+        // Send success with 0 bytes read
+        if (send_success(sock) < 0) {
+            return -1;
+        }
         int32_t bytes_read = 0;
         return write_full(sock, &bytes_read, sizeof(bytes_read));
     }
@@ -114,8 +194,9 @@ static int handle_read_stdin(socket_t sock) {
     // Allocate buffer
     uint8_t* buffer = (uint8_t*)malloc(max_bytes);
     if (!buffer) {
-        int32_t bytes_read = -1;
-        return write_full(sock, &bytes_read, sizeof(bytes_read));
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
     }
     
     // Set stdin to non-blocking mode
@@ -125,6 +206,9 @@ static int handle_read_stdin(socket_t sock) {
     if (!PeekNamedPipe(hStdin, NULL, 0, NULL, &bytes_available, NULL)) {
         // stdin might be closed
         free(buffer);
+        if (send_success(sock) < 0) {
+            return -1;
+        }
         int32_t bytes_read = -1;
         return write_full(sock, &bytes_read, sizeof(bytes_read));
     }
@@ -163,6 +247,12 @@ static int handle_read_stdin(socket_t sock) {
     fcntl(STDIN_FILENO, F_SETFL, flags);
 #endif
     
+    // Send success status
+    if (send_success(sock) < 0) {
+        free(buffer);
+        return -1;
+    }
+    
     // Send bytes read
     if (write_full(sock, &bytes_read, sizeof(bytes_read)) < 0) {
         free(buffer);
@@ -190,13 +280,15 @@ static int handle_write_stdout(socket_t sock) {
     }
     
     if (len == 0) {
-        return 0;
+        return send_success(sock);
     }
     
     // Read data
     uint8_t* buffer = (uint8_t*)malloc(len);
     if (!buffer) {
-        return -1;
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
     }
     
     if (read_full(sock, buffer, len) < 0) {
@@ -205,11 +297,18 @@ static int handle_write_stdout(socket_t sock) {
     }
     
     // Write to stdout
-    fwrite(buffer, 1, len, stdout);
+    size_t written = fwrite(buffer, 1, len, stdout);
     fflush(stdout);
     
     free(buffer);
-    return 0;
+    
+    if (written != len) {
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
+    }
+    
+    return send_success(sock);
 }
 
 static int handle_write_stderr(socket_t sock) {
@@ -221,13 +320,15 @@ static int handle_write_stderr(socket_t sock) {
     }
     
     if (len == 0) {
-        return 0;
+        return send_success(sock);
     }
     
     // Read data
     uint8_t* buffer = (uint8_t*)malloc(len);
     if (!buffer) {
-        return -1;
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
     }
     
     if (read_full(sock, buffer, len) < 0) {
@@ -236,11 +337,18 @@ static int handle_write_stderr(socket_t sock) {
     }
     
     // Write to stderr
-    fwrite(buffer, 1, len, stderr);
+    size_t written = fwrite(buffer, 1, len, stderr);
     fflush(stderr);
     
     free(buffer);
-    return 0;
+    
+    if (written != len) {
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
+    }
+    
+    return send_success(sock);
 }
 
 static int handle_get_cwd(socket_t sock) {
@@ -252,15 +360,15 @@ static int handle_get_cwd(socket_t sock) {
         // Try with longer path or get short path
         WCHAR* long_path = (WCHAR*)malloc(32768 * sizeof(WCHAR));
         if (!long_path) {
-            uint32_t zero = 0;
-            return write_full(sock, &zero, sizeof(zero));
+            return send_error(sock, "Failed to allocate memory for path");
         }
         
         len = GetCurrentDirectoryW(32768, long_path);
         if (len == 0 || len > 32768) {
             free(long_path);
-            uint32_t zero = 0;
-            return write_full(sock, &zero, sizeof(zero));
+            char error_msg[256];
+            get_error_message(error_msg, sizeof(error_msg));
+            return send_error(sock, error_msg);
         }
         
         // Get short path if too long
@@ -281,17 +389,23 @@ static int handle_get_cwd(socket_t sock) {
     // Convert to UTF-8
     int utf8_len = WideCharToMultiByte(CP_UTF8, 0, wide_path, -1, NULL, 0, NULL, NULL);
     if (utf8_len <= 0) {
-        uint32_t zero = 0;
-        return write_full(sock, &zero, sizeof(zero));
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
     }
     
     char* utf8_path = (char*)malloc(utf8_len);
     if (!utf8_path) {
-        uint32_t zero = 0;
-        return write_full(sock, &zero, sizeof(zero));
+        return send_error(sock, "Failed to allocate memory for UTF-8 path");
     }
     
     WideCharToMultiByte(CP_UTF8, 0, wide_path, -1, utf8_path, utf8_len, NULL, NULL);
+    
+    // Send success status
+    if (send_success(sock) < 0) {
+        free(utf8_path);
+        return -1;
+    }
     
     uint32_t path_len = (uint32_t)(utf8_len - 1); // -1 to exclude null terminator
     if (write_full(sock, &path_len, sizeof(path_len)) < 0) {
@@ -305,8 +419,14 @@ static int handle_get_cwd(socket_t sock) {
 #else
     char cwd[4096];
     if (getcwd(cwd, sizeof(cwd)) == NULL) {
-        uint32_t zero = 0;
-        return write_full(sock, &zero, sizeof(zero));
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
+    }
+    
+    // Send success status
+    if (send_success(sock) < 0) {
+        return -1;
     }
     
     uint32_t len = (uint32_t)strlen(cwd);
@@ -322,8 +442,9 @@ static int handle_get_env(socket_t sock) {
 #ifdef _WIN32
     LPWCH env_block = GetEnvironmentStringsW();
     if (!env_block) {
-        uint32_t zero = 0;
-        return write_full(sock, &zero, sizeof(zero));
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
     }
     
     // Count environment variables
@@ -332,6 +453,12 @@ static int handle_get_env(socket_t sock) {
     while (*ptr) {
         count++;
         ptr += wcslen(ptr) + 1;
+    }
+    
+    // Send success status
+    if (send_success(sock) < 0) {
+        FreeEnvironmentStringsW(env_block);
+        return -1;
     }
     
     // Send count
@@ -385,6 +512,11 @@ static int handle_get_env(socket_t sock) {
         count++;
     }
     
+    // Send success status
+    if (send_success(sock) < 0) {
+        return -1;
+    }
+    
     // Send count
     if (write_full(sock, &count, sizeof(count)) < 0) {
         return -1;
@@ -413,6 +545,9 @@ static int handle_exit_cmd(socket_t sock) {
         return -1;
     }
     
+    // Send success response before exiting
+    send_success(sock);
+    
     // Close socket and exit
     close_socket(sock);
     exit(exit_code);
@@ -422,31 +557,55 @@ static int handle_exit_cmd(socket_t sock) {
 
 static int handle_close_stdin(socket_t sock) {
 #ifdef _WIN32
-    CloseHandle(GetStdHandle(STD_INPUT_HANDLE));
+    if (!CloseHandle(GetStdHandle(STD_INPUT_HANDLE))) {
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
+    }
 #else
-    close(STDIN_FILENO);
+    if (close(STDIN_FILENO) < 0) {
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
+    }
 #endif
-    return 0;
+    return send_success(sock);
 }
 
 static int handle_close_stdout(socket_t sock) {
     fflush(stdout);
 #ifdef _WIN32
-    CloseHandle(GetStdHandle(STD_OUTPUT_HANDLE));
+    if (!CloseHandle(GetStdHandle(STD_OUTPUT_HANDLE))) {
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
+    }
 #else
-    close(STDOUT_FILENO);
+    if (close(STDOUT_FILENO) < 0) {
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
+    }
 #endif
-    return 0;
+    return send_success(sock);
 }
 
 static int handle_close_stderr(socket_t sock) {
     fflush(stderr);
 #ifdef _WIN32
-    CloseHandle(GetStdHandle(STD_ERROR_HANDLE));
+    if (!CloseHandle(GetStdHandle(STD_ERROR_HANDLE))) {
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
+    }
 #else
-    close(STDERR_FILENO);
+    if (close(STDERR_FILENO) < 0) {
+        char error_msg[256];
+        get_error_message(error_msg, sizeof(error_msg));
+        return send_error(sock, error_msg);
+    }
 #endif
-    return 0;
+    return send_success(sock);
 }
 
 int main(int argc, char* argv[]) {

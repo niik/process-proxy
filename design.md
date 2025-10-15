@@ -14,7 +14,17 @@ If the connection is successful, it will read commands from the TCP socket and e
 
 The executable will be cross-platform, supporting Windows, macOS, and Linux.
 
-The protocol for communication between the executable and the TCP server will be a single byte command identifier followed by a per-command specific payload. The commands will include:
+The protocol for communication between the executable and the TCP server will be a single byte command identifier followed by a per-command specific payload.
+
+All commands return a response with the following format:
+- Status code: 4-byte signed integer (0 for success, non-zero for error)
+- If status code is non-zero (error):
+  - Error message length: 4-byte unsigned integer
+  - Error message: UTF-8 encoded string
+- If status code is zero (success):
+  - Command-specific response data (if any)
+
+The commands will include:
 
 - `0x01`: Read command line arguments
   - Payload: None
@@ -25,8 +35,10 @@ The protocol for communication between the executable and the TCP server will be
   - Implementation: This should be non-blocking, returning 0 bytes read if no data is available and -1 if stdin is closed.
 - `0x03`: Write to stdout
   - Payload: 4-byte unsigned integer specifying the number of bytes to write, followed by the bytes to write
+  - Response: None (only status code)
 - `0x04`: Write to stderr
   - Payload: 4-byte unsigned integer specifying the number of bytes to write, followed by the bytes to write
+  - Response: None (only status code)
 - `0x05`: Read current working directory
   - Payload: None
   - Response: 4-byte unsigned integer specifying the length of the directory string, followed by the directory string. On Windows the current directory will be retrieved using GetCurrentDirectoryW. If the length is greater than MAX_PATH it will be shortened using GetShortPathNameW before being converted to UTF-8 using WideCharToMultiByte.
@@ -35,11 +47,16 @@ The protocol for communication between the executable and the TCP server will be
   - Response: 4-byte unsigned integer specifying the number of environment variables, followed by each variable prefixed by a 4-byte unsigned integer specifying its length
 - `0x07`: Exit process
   - Payload: 4-byte signed integer specifying the exit code
+  - Response: None (only status code, sent before exiting)
 - `0x09`: Close stdin
   - Payload: None
+  - Response: None (only status code)
 - `0x0A`: Close stdout
   - Payload: None
+  - Response: None (only status code)
 - `0x0B`: Close stderr
+  - Payload: None
+  - Response: None (only status code)
 
 ## TypeScript library
 

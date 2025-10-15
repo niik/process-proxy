@@ -51,10 +51,10 @@ class StdinStream extends Readable {
         payload.writeInt32LE(8192, 0); // Read up to 8KB at a time
 
         const response = await this.connection.sendCommand(CMD_READ_STDIN, payload);
-        const bytesRead = response.readInt32LE(0);
+        const bytesRead = response.readInt32LE(4); // Skip status code at offset 0
 
         if (bytesRead > 0) {
-          const data = response.subarray(4, 4 + bytesRead);
+          const data = response.subarray(8, 8 + bytesRead); // Skip status (4) + bytesRead (4)
           const shouldContinue = this.push(data);
           if (shouldContinue && this.polling) {
             this.startPolling();
@@ -190,34 +190,53 @@ export class ProcessProxyConnection extends EventEmitter {
       return;
     }
 
-    // For commands that don't expect a response, resolve immediately
-    if (
-      this.currentCommand.command === CMD_WRITE_STDOUT ||
-      this.currentCommand.command === CMD_WRITE_STDERR ||
-      this.currentCommand.command === CMD_EXIT ||
-      this.currentCommand.command === CMD_CLOSE_STDIN ||
-      this.currentCommand.command === CMD_CLOSE_STDOUT ||
-      this.currentCommand.command === CMD_CLOSE_STDERR
-    ) {
-      // These commands don't have responses, resolve immediately after sending
+    // All commands now have at least a 4-byte status code
+    if (this.receiveBuffer.length < 4) {
+      return; // Need at least status code
+    }
+
+    // Read status code
+    const statusCode = this.receiveBuffer.readInt32LE(0);
+
+    if (statusCode !== 0) {
+      // Error response - need status + error message length + error message
+      if (this.receiveBuffer.length < 8) {
+        return; // Need at least status + length
+      }
+
+      const errorMsgLen = this.receiveBuffer.readUInt32LE(4);
+      const totalErrorLength = 4 + 4 + errorMsgLen; // status + length + message
+
+      if (this.receiveBuffer.length < totalErrorLength) {
+        return; // Need more data
+      }
+
+      const errorMsg = this.receiveBuffer.toString('utf8', 8, 8 + errorMsgLen);
+      this.receiveBuffer = this.receiveBuffer.subarray(totalErrorLength);
+      this.expectedResponseLength = null;
+
+      const command = this.currentCommand;
+      this.currentCommand = null;
+      command.reject(new Error(`Command failed: ${errorMsg}`));
+
+      this.processNextCommand();
       return;
     }
 
-    // Determine expected response length based on command
+    // Success response - determine expected response length based on command
     if (this.expectedResponseLength === null) {
-      if (this.receiveBuffer.length < 4) {
-        return; // Need at least 4 bytes to determine length
-      }
-
-      // Read the first 4 bytes to determine total response size
-      const firstValue = this.receiveBuffer.readUInt32LE(0);
+      // Start with 4 bytes for status code
+      let expectedLength = 4;
 
       switch (this.currentCommand.command) {
         case CMD_GET_ARGS: {
-          // Response: count (4 bytes) + each arg (4 bytes length + data)
-          const count = firstValue;
-          let expectedLength = 4;
-          let offset = 4;
+          // Response: status + count (4 bytes) + each arg (4 bytes length + data)
+          if (this.receiveBuffer.length < 8) {
+            return; // Need at least status + count
+          }
+          const count = this.receiveBuffer.readUInt32LE(4);
+          expectedLength += 4; // count
+          let offset = 8;
 
           for (let i = 0; i < count; i++) {
             if (this.receiveBuffer.length < offset + 4) {
@@ -233,24 +252,33 @@ export class ProcessProxyConnection extends EventEmitter {
         }
 
         case CMD_READ_STDIN: {
-          // Response: bytes_read (4 bytes) + data
-          const bytesRead = this.receiveBuffer.readInt32LE(0);
-          this.expectedResponseLength = 4 + Math.max(0, bytesRead);
+          // Response: status + bytes_read (4 bytes) + data
+          if (this.receiveBuffer.length < 8) {
+            return; // Need at least status + bytes_read
+          }
+          const bytesRead = this.receiveBuffer.readInt32LE(4);
+          this.expectedResponseLength = 4 + 4 + Math.max(0, bytesRead);
           break;
         }
 
         case CMD_GET_CWD: {
-          // Response: length (4 bytes) + string
-          const len = firstValue;
-          this.expectedResponseLength = 4 + len;
+          // Response: status + length (4 bytes) + string
+          if (this.receiveBuffer.length < 8) {
+            return; // Need at least status + length
+          }
+          const len = this.receiveBuffer.readUInt32LE(4);
+          this.expectedResponseLength = 4 + 4 + len;
           break;
         }
 
         case CMD_GET_ENV: {
-          // Response: count (4 bytes) + each env var (4 bytes length + data)
-          const count = firstValue;
-          let expectedLength = 4;
-          let offset = 4;
+          // Response: status + count (4 bytes) + each env var (4 bytes length + data)
+          if (this.receiveBuffer.length < 8) {
+            return; // Need at least status + count
+          }
+          const count = this.receiveBuffer.readUInt32LE(4);
+          expectedLength += 4; // count
+          let offset = 8;
 
           for (let i = 0; i < count; i++) {
             if (this.receiveBuffer.length < offset + 4) {
@@ -264,6 +292,16 @@ export class ProcessProxyConnection extends EventEmitter {
           this.expectedResponseLength = expectedLength;
           break;
         }
+
+        case CMD_WRITE_STDOUT:
+        case CMD_WRITE_STDERR:
+        case CMD_EXIT:
+        case CMD_CLOSE_STDIN:
+        case CMD_CLOSE_STDOUT:
+        case CMD_CLOSE_STDERR:
+          // These commands only return status code (no additional data on success)
+          this.expectedResponseLength = 4;
+          break;
 
         default:
           this.currentCommand.reject(new Error('Unknown command'));
@@ -343,27 +381,14 @@ export class ProcessProxyConnection extends EventEmitter {
         return;
       }
 
-      // For commands that don't expect a response, resolve immediately
-      if (
-        this.currentCommand!.command === CMD_WRITE_STDOUT ||
-        this.currentCommand!.command === CMD_WRITE_STDERR ||
-        this.currentCommand!.command === CMD_EXIT ||
-        this.currentCommand!.command === CMD_CLOSE_STDIN ||
-        this.currentCommand!.command === CMD_CLOSE_STDOUT ||
-        this.currentCommand!.command === CMD_CLOSE_STDERR
-      ) {
-        const cmd = this.currentCommand!;
-        this.currentCommand = null;
-        cmd.resolve(Buffer.allocUnsafe(0));
-        this.processNextCommand();
-      }
+      // All commands now expect a response with status code
     });
   }
 
   public async getArgs(): Promise<string[]> {
     const response = await this.sendCommand(CMD_GET_ARGS);
     const args: string[] = [];
-    let offset = 0;
+    let offset = 4; // Skip status code
 
     const count = response.readUInt32LE(offset);
     offset += 4;
@@ -382,7 +407,7 @@ export class ProcessProxyConnection extends EventEmitter {
   public async getEnv(): Promise<{ [key: string]: string }> {
     const response = await this.sendCommand(CMD_GET_ENV);
     const env: { [key: string]: string } = {};
-    let offset = 0;
+    let offset = 4; // Skip status code
 
     const count = response.readUInt32LE(offset);
     offset += 4;
@@ -406,8 +431,8 @@ export class ProcessProxyConnection extends EventEmitter {
 
   public async getCwd(): Promise<string> {
     const response = await this.sendCommand(CMD_GET_CWD);
-    const len = response.readUInt32LE(0);
-    return response.toString('utf8', 4, 4 + len);
+    const len = response.readUInt32LE(4); // Skip status code at offset 0
+    return response.toString('utf8', 8, 8 + len);
   }
 
   public async exit(code: number): Promise<void> {
