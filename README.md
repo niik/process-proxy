@@ -36,19 +36,16 @@ This will compile both the TypeScript library and the native C executable.
 ```typescript
 import { createProxyProcessServer, getProxyCommandPath } from 'process-proxy';
 import { spawn } from 'child_process';
+import { AddressInfo } from 'net';
 
 // Create server with connection callback (idiomatic Node.js style)
-const server = createProxyProcessServer(async (connection) => {
+const server = createProxyProcessServer((connection) => {
   console.log('Native process connected!');
   
   // Get process information
-  const args = await connection.getArgs();
-  const env = await connection.getEnv();
-  const cwd = await connection.getCwd();
-  
-  console.log('Arguments:', args);
-  console.log('Environment:', env);
-  console.log('Working Directory:', cwd);
+  connection.getArgs().then(args => console.log('Arguments:', args));
+  connection.getEnv().then(env => console.log('Environment:', env));
+  connection.getCwd().then(cwd => console.log('Working Directory:', cwd));
   
   // Write to the process stdout
   connection.stdout.write('Hello from ProcessProxy!\n');
@@ -64,7 +61,12 @@ const server = createProxyProcessServer(async (connection) => {
   });
 });
 
-const port = await server.start();
+// Start listening on a random port
+const port = await new Promise<number>((resolve) => {
+  server.listen(0, '127.0.0.1', () => {
+    resolve((server.address() as AddressInfo).port);
+  });
+});
 
 // Launch the native executable with the port in environment
 const nativeExe = getProxyCommandPath();
@@ -75,21 +77,8 @@ const child = spawn(nativeExe, ['arg1', 'arg2'], {
   }
 });
 
-// Later, stop the server
-// await server.stop();
-```
-
-Alternatively, you can use the event-based approach:
-
-```typescript
-import { ProcessProxyServer } from 'process-proxy';
-
-const server = new ProcessProxyServer();
-const port = await server.start();
-
-server.on('connection', (connection) => {
-  // Handle connection
-});
+// Later, close the server
+// server.close();
 ```
 
 ### Proxying stdin/stdout/stderr
@@ -134,31 +123,36 @@ server.on('connection', async (connection) => {
 
 ### createProxyProcessServer()
 
-Factory function to create a new ProcessProxyServer instance (similar to Node.js's `net.createServer()`).
+Creates a TCP server that listens for incoming connections from native processes. Returns a standard Node.js `net.Server` instance.
 
 ```typescript
 import { createProxyProcessServer } from 'process-proxy';
+import { AddressInfo } from 'net';
 
-// With connection callback
+// Create server with connection callback
 const server = createProxyProcessServer((connection) => {
   console.log('New connection!');
   connection.getArgs().then(console.log);
 });
 
-// With custom stdin polling interval
-const server = createProxyProcessServer((connection) => {
-  // Handle connection
-}, 200); // Poll stdin every 200ms
+// Start listening
+const port = await new Promise<number>((resolve) => {
+  server.listen(0, '127.0.0.1', () => {
+    resolve((server.address() as AddressInfo).port);
+  });
+});
 
-// Or just with polling interval
-const server = createProxyProcessServer(200);
+// Use standard server methods
+server.on('listening', () => console.log('Server started'));
+server.on('error', (err) => console.error('Server error:', err));
+server.close(() => console.log('Server closed'));
 ```
 
 **Parameters:**
-- `connectionListener?: (connection: ProcessProxyConnection) => void` - Optional callback invoked when a connection is established
-- `stdinPollingInterval?: number` - Optional polling interval for stdin in milliseconds (default: 100)
+- `listener: (connection: ProcessProxyConnection) => void` - Callback invoked for each incoming connection
+- `options?: ServerOpts` - Optional Node.js server options (see `net.createServer`)
 
-**Returns:** `ProcessProxyServer`
+**Returns:** `Server` - A standard Node.js `net.Server` instance
 
 ### getProxyCommandPath()
 
@@ -175,20 +169,6 @@ This utility function automatically:
 - Resolves the correct path relative to the installed package
 - Adds the `.exe` suffix on Windows
 - Works regardless of where the package is installed
-
-### ProcessProxyServer
-
-Handles the TCP server and manages connections to the native executable.
-
-#### Methods
-
-- `start(port?: number): Promise<number>` - Starts the TCP server on the specified port (or a random available port if not specified). Returns a promise that resolves with the port number.
-- `stop(): Promise<void>` - Stops the TCP server and closes all connections
-- `getPort(): number` - Returns the port number the server is listening on
-
-#### Events
-
-- `connection` - Emitted when a new connection is established. Listener signature: `(connection: ProcessProxyConnection) => void`
 
 ### ProcessProxyConnection
 
@@ -248,6 +228,7 @@ Example security implementation:
 import crypto from 'crypto';
 import { createProxyProcessServer, getProxyCommandPath } from 'process-proxy';
 import { spawn } from 'child_process';
+import { AddressInfo } from 'net';
 
 const secret = crypto.randomBytes(32).toString('hex');
 
@@ -270,7 +251,12 @@ const server = createProxyProcessServer(async (connection) => {
   }
 });
 
-const port = await server.start();
+// Start listening
+const port = await new Promise<number>((resolve) => {
+  server.listen(0, '127.0.0.1', () => {
+    resolve((server.address() as AddressInfo).port);
+  });
+});
 
 // Launch with secret
 const child = spawn(getProxyCommandPath(), [], {

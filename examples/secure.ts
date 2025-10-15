@@ -1,6 +1,7 @@
 import { createProxyProcessServer, getProxyCommandPath } from '../src/index.js';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
+import { AddressInfo } from 'net';
 
 async function main() {
   // Generate a secret token for authentication
@@ -40,9 +41,8 @@ async function main() {
         console.log('Closing connection...');
         await connection.exit(0);
 
-        setTimeout(async () => {
-          await server.stop();
-          console.log('Server stopped');
+        setTimeout(() => {
+          server.close(() => console.log("Server stopped"));
         }, 100);
       }, 1000);
 
@@ -56,7 +56,11 @@ async function main() {
     }
   });
 
-  const port = await server.start();
+  const port = await new Promise<number>((resolve, reject) => {
+    server.listen(0, '127.0.0.1', () => {
+      resolve((server.address() as AddressInfo).port);
+    });
+  });
   console.log(`ProcessProxy server started on port ${port}`);
 
   // Launch the native executable with the secret

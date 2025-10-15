@@ -60,30 +60,29 @@ The commands will include:
 
 ## TypeScript library
 
-The TypeScript library will provide a high-level API for interacting with the native executable. It will handle setting up the TCP server on a random available port. It will not handle launching the native executable; that will be the responsibility of the user of the library. The library will provide methods for sending commands to the executable and receiving responses.
+The TypeScript library provides a high-level API for interacting with the native executable. It leverages Node.js's built-in `net` module for TCP server functionality and does not handle launching the native executable; that is the responsibility of the user of the library.
 
-The high level API will be two classes, `ProcessProxyServer` and `ProcessProxyConnection`.
+### createProxyProcessServer
 
-### ProcessProxyServer
+A factory function that creates a standard Node.js `net.Server` configured to handle connections from the native executable. It accepts a callback that receives a `ProcessProxyConnection` instance for each incoming connection.
 
-Handles the TCP server and manages connections to the native executable. 
-- Listens for incoming connections from the native executable
-- Once a connection is established it creates a `ProcessProxyConnection` instance to handle communication with that specific instance of the executable and emits an event with the instance.
+```typescript
+const server = createProxyProcessServer((connection) => {
+  // Handle connection
+});
+```
 
-Methods:
-
-- `start()`: Starts the TCP server on a random available port
-- `stop()`: Stops the TCP server and closes all connections
-- `getPort()`: Returns the port number the server is listening on
-- `on(event: 'connection', listener: (connection: ProcessProxyConnection) => void)`: Registers an event listener for new connections
+The function is a thin wrapper around Node.js's `net.createServer()`, returning a standard `Server` instance that supports all native server methods like `listen()`, `close()`, event listeners, etc.
 
 ### ProcessProxyConnection
 
-Represents a connection to a single instance of the native executable.
-- Sends commands to the executable and receives responses
-- Manages the lifecycle of the connection, including reconnection logic
+Represents a connection to a single instance of the native executable. Created automatically by `createProxyProcessServer` when a native process connects.
 
-Method:
+### ProcessProxyConnection
+
+Represents a connection to a single instance of the native executable. Created automatically by `createProxyProcessServer` when a native process connects.
+
+Methods:
 - `on(event: 'disconnect', listener: () => void)`: Registers an event listener for disconnection events
 - `on(event: 'error', listener: (error: Error) => void)`: Registers an event listener for error events
 - `sendCommand(command: number, payload?: Buffer): Promise<Buffer>`: Sends a command to the executable and returns a promise that resolves with the response. The sendCommand will maintain an internal queue of commands to ensure that only one command is in-flight at a time.
@@ -97,7 +96,7 @@ Properties:
  - `stdout`: Writable stream for the executable's stdout
  - `stderr`: Writable stream for the executable's stderr
 
-The stdin/stdout/stderr streams will be implemented using custom Stream derived classes (stdin will implement stream.Readable and the others stream.Writable) which will internally use the `sendCommand` method to read/write data. The streams will support the close method to close the respective stream using the appropriate command.
+The stdin/stdout/stderr streams are implemented using custom Stream derived classes (stdin implements stream.Readable and the others stream.Writable) which internally use the `sendCommand` method to read/write data. The streams support the close method to close the respective stream using the appropriate command.
 
 The stdin stream will (as long as it's not paused) internally poll for stdin data using the `0x02` command and handle the response accordingly (e.g., emitting 'data' and 'close' events). The polling interval will be configurable, defaulting to 100ms.
 
