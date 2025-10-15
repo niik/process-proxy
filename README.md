@@ -39,9 +39,7 @@ import { spawn } from 'child_process';
 
 // Create and start the server
 const server = new ProcessProxyServer();
-await server.start();
-
-const port = server.getPort();
+const port = await server.start();
 
 // Listen for connections
 server.on('connection', async (connection) => {
@@ -145,7 +143,7 @@ Handles the TCP server and manages connections to the native executable.
 
 #### Methods
 
-- `start(port?: number): Promise<void>` - Starts the TCP server on the specified port (or a random available port if not specified)
+- `start(port?: number): Promise<number>` - Starts the TCP server on the specified port (or a random available port if not specified). Returns a promise that resolves with the port number.
 - `stop(): Promise<void>` - Stops the TCP server and closes all connections
 - `getPort(): number` - Returns the port number the server is listening on
 

@@ -4,9 +4,8 @@ import { spawn } from 'child_process';
 async function main() {
   // Create and start the server
   const server = new ProcessProxyServer();
-  await server.start();
+  const port = await server.start();
 
-  const port = server.getPort();
   console.log(`ProcessProxy server started on port ${port}`);
 
   // Listen for connections
