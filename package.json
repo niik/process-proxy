@@ -17,6 +17,7 @@
     "build:native": "node-gyp rebuild",
     "build:ts": "tsc",
     "clean": "rm -rf dist build",
+    "prepublishOnly": "npm run build:ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
