@@ -13,26 +13,29 @@ export class ProcessProxyServer extends EventEmitter {
     this.stdinPollingInterval = stdinPollingInterval;
   }
 
-  public async start(port: number = 0): Promise<void> {
+  public async start(port: number = 0): Promise<number> {
     if (this.server) {
       throw new Error('Server is already running');
     }
 
     return new Promise((resolve, reject) => {
-      this.server = createServer((socket: Socket) => {
+      const server = this.server = createServer((socket: Socket) => {
         this.handleConnection(socket);
       });
 
-      this.server.on('error', (error: Error) => {
+      server.on('error', (error: Error) => {
         reject(error);
       });
 
-      this.server.listen(port, '127.0.0.1', () => {
-        const address = this.server!.address();
+      server.listen(port, '127.0.0.1', () => {
+        const address = server.address();
         if (address && typeof address === 'object') {
           this.port = address.port;
+          resolve(this.port)
+        } else {
+          reject(new Error('Failed to get server address'));
+          server.close();
         }
-        resolve();
       });
     });
   }
