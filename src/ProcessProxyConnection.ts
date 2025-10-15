@@ -96,12 +96,16 @@ class StdinStream extends Readable {
   }
 }
 
-class StdoutStream extends Writable {
+class StdioWriteStream extends Writable {
   private connection: ProcessProxyConnection;
+  private writeCommand: number;
+  private closeCommand: number;
 
-  constructor(connection: ProcessProxyConnection) {
+  constructor(connection: ProcessProxyConnection, writeCommand: number, closeCommand: number) {
     super();
     this.connection = connection;
+    this.writeCommand = writeCommand;
+    this.closeCommand = closeCommand;
   }
 
   _write(
@@ -115,43 +119,13 @@ class StdoutStream extends Writable {
     buffer.copy(payload, 4);
 
     this.connection
-      .sendCommand(CMD_WRITE_STDOUT, payload)
+      .sendCommand(this.writeCommand, payload)
       .then(() => callback())
       .catch((error) => callback(error));
   }
 
   async close(): Promise<void> {
-    await this.connection.sendCommand(CMD_CLOSE_STDOUT);
-    this.end();
-  }
-}
-
-class StderrStream extends Writable {
-  private connection: ProcessProxyConnection;
-
-  constructor(connection: ProcessProxyConnection) {
-    super();
-    this.connection = connection;
-  }
-
-  _write(
-    chunk: Buffer | string,
-    encoding: BufferEncoding,
-    callback: (error?: Error | null) => void
-  ): void {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding);
-    const payload = Buffer.allocUnsafe(4 + buffer.length);
-    payload.writeUInt32LE(buffer.length, 0);
-    buffer.copy(payload, 4);
-
-    this.connection
-      .sendCommand(CMD_WRITE_STDERR, payload)
-      .then(() => callback())
-      .catch((error) => callback(error));
-  }
-
-  async close(): Promise<void> {
-    await this.connection.sendCommand(CMD_CLOSE_STDERR);
+    await this.connection.sendCommand(this.closeCommand);
     this.end();
   }
 }
@@ -165,15 +139,15 @@ export class ProcessProxyConnection extends EventEmitter {
   private expectedResponseLength: number | null = null;
 
   public readonly stdin: StdinStream;
-  public readonly stdout: StdoutStream;
-  public readonly stderr: StderrStream;
+  public readonly stdout: StdioWriteStream;
+  public readonly stderr: StdioWriteStream;
 
   constructor(socket: Socket, stdinPollingInterval: number = 100) {
     super();
     this.socket = socket;
     this.stdin = new StdinStream(this, stdinPollingInterval);
-    this.stdout = new StdoutStream(this);
-    this.stderr = new StderrStream(this);
+    this.stdout = new StdioWriteStream(this, CMD_WRITE_STDOUT, CMD_CLOSE_STDOUT);
+    this.stderr = new StdioWriteStream(this, CMD_WRITE_STDERR, CMD_CLOSE_STDERR);
 
     this.socket.on('data', (data: Buffer) => this.handleData(data));
     this.socket.on('close', () => this.handleClose());
