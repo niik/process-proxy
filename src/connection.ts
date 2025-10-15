@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { Socket } from 'net';
-import { Readable, Writable } from 'stream';
+import { ReadStream } from './read-stream.js';
+import { WriteStream } from './write-stream.js';
 
 // Command identifiers
 const CMD_GET_ARGS = 0x01;
@@ -21,115 +22,6 @@ interface QueuedCommand {
   reject: (error: Error) => void;
 }
 
-class StdinStream extends Readable {
-  private connection: ProcessProxyConnection;
-  private polling: boolean = false;
-  private pollingInterval: number;
-  private pollingTimer?: NodeJS.Timeout;
-
-  constructor(connection: ProcessProxyConnection, pollingInterval: number = 100) {
-    super();
-    this.connection = connection;
-    this.pollingInterval = pollingInterval;
-  }
-
-  _read(size: number): void {
-    if (!this.polling) {
-      this.polling = true;
-      this.startPolling();
-    }
-  }
-
-  private startPolling(): void {
-    if (!this.polling) {
-      return;
-    }
-
-    this.pollingTimer = setTimeout(async () => {
-      try {
-        const payload = Buffer.allocUnsafe(4);
-        payload.writeInt32LE(8192, 0); // Read up to 8KB at a time
-
-        const response = await this.connection.sendCommand(CMD_READ_STDIN, payload);
-        const bytesRead = response.readInt32LE(4); // Skip status code at offset 0
-
-        if (bytesRead > 0) {
-          const data = response.subarray(8, 8 + bytesRead); // Skip status (4) + bytesRead (4)
-          const shouldContinue = this.push(data);
-          if (shouldContinue && this.polling) {
-            this.startPolling();
-          }
-        } else if (bytesRead < 0) {
-          // stdin closed
-          this.push(null);
-          this.polling = false;
-        } else {
-          // No data available, continue polling
-          if (this.polling) {
-            this.startPolling();
-          }
-        }
-      } catch (error) {
-        this.destroy(error as Error);
-        this.polling = false;
-      }
-    }, this.pollingInterval);
-  }
-
-  _destroy(error: Error | null, callback: (error: Error | null) => void): void {
-    this.polling = false;
-    if (this.pollingTimer) {
-      clearTimeout(this.pollingTimer);
-      this.pollingTimer = undefined;
-    }
-    callback(error);
-  }
-
-  async close(): Promise<void> {
-    this.polling = false;
-    if (this.pollingTimer) {
-      clearTimeout(this.pollingTimer);
-      this.pollingTimer = undefined;
-    }
-    await this.connection.sendCommand(CMD_CLOSE_STDIN);
-    this.push(null);
-  }
-}
-
-class StdioWriteStream extends Writable {
-  private connection: ProcessProxyConnection;
-  private writeCommand: number;
-  private closeCommand: number;
-
-  constructor(connection: ProcessProxyConnection, writeCommand: number, closeCommand: number) {
-    super();
-    this.connection = connection;
-    this.writeCommand = writeCommand;
-    this.closeCommand = closeCommand;
-  }
-
-  _write(
-    chunk: Buffer | string,
-    encoding: BufferEncoding,
-    callback: (error?: Error | null) => void
-  ): void {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding);
-    const payload = Buffer.allocUnsafe(4 + buffer.length);
-    payload.writeUInt32LE(buffer.length, 0);
-    buffer.copy(payload, 4);
-
-    this.connection
-      .sendCommand(this.writeCommand, payload)
-      .then(() => callback())
-      .catch((error) => callback(error));
-  }
-
-  async close(): Promise<void> {
-    await this.connection.sendCommand(this.closeCommand);
-    this.end();
-  }
-}
-
 export class ProcessProxyConnection extends EventEmitter {
   private socket: Socket;
   private commandQueue: QueuedCommand[] = [];
@@ -138,16 +30,16 @@ export class ProcessProxyConnection extends EventEmitter {
   private currentCommand: QueuedCommand | null = null;
   private expectedResponseLength: number | null = null;
 
-  public readonly stdin: StdinStream;
-  public readonly stdout: StdioWriteStream;
-  public readonly stderr: StdioWriteStream;
+  public readonly stdin: ReadStream;
+  public readonly stdout: WriteStream;
+  public readonly stderr: WriteStream;
 
   constructor(socket: Socket, stdinPollingInterval: number = 100) {
     super();
     this.socket = socket;
-    this.stdin = new StdinStream(this, stdinPollingInterval);
-    this.stdout = new StdioWriteStream(this, CMD_WRITE_STDOUT, CMD_CLOSE_STDOUT);
-    this.stderr = new StdioWriteStream(this, CMD_WRITE_STDERR, CMD_CLOSE_STDERR);
+    this.stdin = new ReadStream(this, stdinPollingInterval);
+    this.stdout = new WriteStream(this, CMD_WRITE_STDOUT, CMD_CLOSE_STDOUT);
+    this.stderr = new WriteStream(this, CMD_WRITE_STDERR, CMD_CLOSE_STDERR);
 
     this.socket.on('data', (data: Buffer) => this.handleData(data));
     this.socket.on('close', () => this.handleClose());
