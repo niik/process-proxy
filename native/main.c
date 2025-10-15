@@ -667,6 +667,17 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
+    // Send handshake
+    const char* handshake = "ProcessProxy 0001 f10a7b06cf0f0896";
+    if (send(g_socket, handshake, 34, 0) != 34) {
+        fprintf(stderr, "Error: Failed to send handshake\n");
+        close_socket(g_socket);
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
+    
     // Main command loop
     while (1) {
         uint8_t cmd;

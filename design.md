@@ -10,7 +10,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 The native executable will be written in C and compiled using node-gyp. It will on launch attempt to connect to a TCP server running on localhost at a port specifed by the environment variable `PROCESS_PROXY_PORT`. If no such variable is set, it will exit with an error code and an error message written to its stderr.
 
-If the connection is successful, it will read commands from the TCP socket and execute them, sending the results back over the socket. If the connection fails, it will exit with an error code.
+If the connection is successful, it will immediately send a handshake to identify itself as a valid ProcessProxy client. The handshake is exactly 34 bytes of ASCII text: `ProcessProxy 0001 f10a7b06cf0f0896`. This consists of:
+- Protocol name: "ProcessProxy" (12 bytes)
+- Space separator (1 byte)
+- Protocol version: "0001" (4 bytes)
+- Space separator (1 byte)
+- Magic string: "f10a7b06cf0f0896" (16 bytes)
+
+After the handshake is sent, the executable will read commands from the TCP socket and execute them, sending the results back over the socket. If the connection fails, it will exit with an error code.
 
 The executable will be cross-platform, supporting Windows, macOS, and Linux.
 
@@ -65,6 +72,8 @@ The TypeScript library provides a high-level API for interacting with the native
 ### createProxyProcessServer
 
 A factory function that creates a standard Node.js `net.Server` configured to handle connections from the native executable. It accepts a callback that receives a `ProcessProxyConnection` instance for each incoming connection.
+
+The function validates each connection by expecting a handshake within 500ms. The handshake must be exactly 34 bytes: `ProcessProxy 0001 f10a7b06cf0f0896`. Connections that don't send a valid handshake or don't send it within the timeout are immediately closed. This prevents random TCP connections from being processed.
 
 ```typescript
 const server = createProxyProcessServer((connection) => {
