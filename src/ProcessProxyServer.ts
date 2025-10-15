@@ -100,3 +100,52 @@ export class ProcessProxyServer extends EventEmitter {
     return this.port;
   }
 }
+
+/**
+ * Creates a new ProcessProxyServer instance with an optional connection callback.
+ * Similar to Node.js's net.createServer().
+ * 
+ * @param connectionListener - Optional callback invoked when a connection is established
+ * @param stdinPollingInterval - Optional polling interval for stdin (default: 100ms)
+ * @returns A new ProcessProxyServer instance
+ * 
+ * @example
+ * ```typescript
+ * const server = createProxyProcessServer((connection) => {
+ *   console.log('New connection!');
+ *   connection.getArgs().then(console.log);
+ * });
+ * await server.start();
+ * ```
+ */
+export function createProxyProcessServer(
+  connectionListener?: (connection: ProcessProxyConnection) => void,
+  stdinPollingInterval?: number
+): ProcessProxyServer;
+
+export function createProxyProcessServer(
+  stdinPollingInterval?: number
+): ProcessProxyServer;
+
+export function createProxyProcessServer(
+  connectionListenerOrInterval?: ((connection: ProcessProxyConnection) => void) | number,
+  stdinPollingInterval: number = 100
+): ProcessProxyServer {
+  let connectionListener: ((connection: ProcessProxyConnection) => void) | undefined;
+  let interval = stdinPollingInterval;
+
+  // Handle overloaded signatures
+  if (typeof connectionListenerOrInterval === 'function') {
+    connectionListener = connectionListenerOrInterval;
+  } else if (typeof connectionListenerOrInterval === 'number') {
+    interval = connectionListenerOrInterval;
+  }
+
+  const server = new ProcessProxyServer(interval);
+
+  if (connectionListener) {
+    server.on('connection', connectionListener);
+  }
+
+  return server;
+}

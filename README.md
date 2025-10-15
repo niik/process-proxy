@@ -34,15 +34,11 @@ This will compile both the TypeScript library and the native C executable.
 ### Basic Example
 
 ```typescript
-import { ProcessProxyServer, getProxyCommandPath } from 'process-proxy';
+import { createProxyProcessServer, getProxyCommandPath } from 'process-proxy';
 import { spawn } from 'child_process';
 
-// Create and start the server
-const server = new ProcessProxyServer();
-const port = await server.start();
-
-// Listen for connections
-server.on('connection', async (connection) => {
+// Create server with connection callback (idiomatic Node.js style)
+const server = createProxyProcessServer(async (connection) => {
   console.log('Native process connected!');
   
   // Get process information
@@ -68,6 +64,8 @@ server.on('connection', async (connection) => {
   });
 });
 
+const port = await server.start();
+
 // Launch the native executable with the port in environment
 const nativeExe = getProxyCommandPath();
 const child = spawn(nativeExe, ['arg1', 'arg2'], {
@@ -79,6 +77,19 @@ const child = spawn(nativeExe, ['arg1', 'arg2'], {
 
 // Later, stop the server
 // await server.stop();
+```
+
+Alternatively, you can use the event-based approach:
+
+```typescript
+import { ProcessProxyServer } from 'process-proxy';
+
+const server = new ProcessProxyServer();
+const port = await server.start();
+
+server.on('connection', (connection) => {
+  // Handle connection
+});
 ```
 
 ### Proxying stdin/stdout/stderr
@@ -120,6 +131,34 @@ server.on('connection', async (connection) => {
 ```
 
 ## API
+
+### createProxyProcessServer()
+
+Factory function to create a new ProcessProxyServer instance (similar to Node.js's `net.createServer()`).
+
+```typescript
+import { createProxyProcessServer } from 'process-proxy';
+
+// With connection callback
+const server = createProxyProcessServer((connection) => {
+  console.log('New connection!');
+  connection.getArgs().then(console.log);
+});
+
+// With custom stdin polling interval
+const server = createProxyProcessServer((connection) => {
+  // Handle connection
+}, 200); // Poll stdin every 200ms
+
+// Or just with polling interval
+const server = createProxyProcessServer(200);
+```
+
+**Parameters:**
+- `connectionListener?: (connection: ProcessProxyConnection) => void` - Optional callback invoked when a connection is established
+- `stdinPollingInterval?: number` - Optional polling interval for stdin in milliseconds (default: 100)
+
+**Returns:** `ProcessProxyServer`
 
 ### getProxyCommandPath()
 
@@ -207,12 +246,12 @@ Example security implementation:
 
 ```typescript
 import crypto from 'crypto';
+import { createProxyProcessServer, getProxyCommandPath } from 'process-proxy';
+import { spawn } from 'child_process';
 
 const secret = crypto.randomBytes(32).toString('hex');
-const server = new ProcessProxyServer();
-await server.start();
 
-server.on('connection', async (connection) => {
+const server = createProxyProcessServer(async (connection) => {
   try {
     const env = await connection.getEnv();
     
@@ -231,11 +270,13 @@ server.on('connection', async (connection) => {
   }
 });
 
+const port = await server.start();
+
 // Launch with secret
-const child = spawn(nativeExe, [], {
+const child = spawn(getProxyCommandPath(), [], {
   env: {
     ...process.env,
-    PROCESS_PROXY_PORT: server.getPort().toString(),
+    PROCESS_PROXY_PORT: port.toString(),
     PROCESS_PROXY_SECRET: secret
   }
 });

@@ -1,15 +1,9 @@
-import { ProcessProxyServer, getProxyCommandPath } from '../src/index.js';
+import { createProxyProcessServer, getProxyCommandPath } from '../src/index.js';
 import { spawn } from 'child_process';
 
 async function main() {
-  // Create and start the server
-  const server = new ProcessProxyServer();
-  const port = await server.start();
-
-  console.log(`ProcessProxy server started on port ${port}`);
-
-  // Listen for connections
-  server.on('connection', async (connection) => {
+  // Create server with connection callback (idiomatic Node.js style)
+  const server = createProxyProcessServer(async (connection) => {
     console.log('Native process connected!');
 
     try {
@@ -43,6 +37,9 @@ async function main() {
       console.error('Error:', error);
     }
   });
+
+  const port = await server.start();
+  console.log(`ProcessProxy server started on port ${port}`);
 
   // Launch the native executable with the port in environment
   const nativeExe = getProxyCommandPath();

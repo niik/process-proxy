@@ -1,4 +1,4 @@
-import { ProcessProxyServer, getProxyCommandPath } from '../src/index.js';
+import { createProxyProcessServer, getProxyCommandPath } from '../src/index.js';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
 
@@ -7,14 +7,8 @@ async function main() {
   const secret = crypto.randomBytes(32).toString('hex');
   console.log('Generated secret token');
 
-  // Create and start the server
-  const server = new ProcessProxyServer();
-  const port = await server.start();
-
-  console.log(`ProcessProxy server started on port ${port}`);
-
-  // Listen for connections
-  server.on('connection', async (connection) => {
+  // Create server with connection callback
+  const server = createProxyProcessServer(async (connection) => {
     console.log('Connection attempt detected...');
 
     try {
@@ -61,6 +55,9 @@ async function main() {
       }
     }
   });
+
+  const port = await server.start();
+  console.log(`ProcessProxy server started on port ${port}`);
 
   // Launch the native executable with the secret
   const nativeExe = getProxyCommandPath();
