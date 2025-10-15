@@ -1,4 +1,4 @@
-import { ProcessProxyServer, getProxyCommandPath } from '../dist/index.js';
+import { ProcessProxyServer, getProxyCommandPath } from '../src/index.js';
 import { spawn } from 'child_process';
 
 async function main() {
