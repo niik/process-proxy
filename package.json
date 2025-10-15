@@ -21,6 +21,8 @@
     "example:basic": "tsx examples/basic.ts",
     "example:streams": "tsx examples/streams.ts",
     "example:secure": "tsx examples/secure.ts",
+    "example:handshake-timeout": "tsx examples/handshake-timeout.ts",
+    "example:handshake-invalid": "tsx examples/handshake-invalid.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
