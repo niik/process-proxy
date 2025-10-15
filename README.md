@@ -2,6 +2,17 @@
 
 A modern npm package (requiring Node 22+) written in TypeScript that enables developers to interact with a native executable, reading its stdin, writing to its stdout, and stderr streams, reading its exit code, arguments, current directory, and environment variables.
 
+## ⚠️ Development Status
+
+**This project is in early development and relies heavily on automated code generation using GitHub Copilot CLI.** While the implementation follows a clear design specification, it has not been extensively tested in production environments. Users should expect:
+
+- Potential unexpected behaviors or edge cases
+- Limited cross-platform testing (primarily tested on macOS arm64)
+- Possible API changes as the project matures
+- Incomplete error handling for all scenarios
+
+**Use at your own risk.** Contributions, bug reports, and testing on different platforms are highly encouraged.
+
 ## Installation
 
 ```bash
