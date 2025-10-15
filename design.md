@@ -11,6 +11,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 The native executable will be written in C and compiled using node-gyp. It will on launch attempt to connect to a TCP server running on localhost at a port specifed by the environment variable `PROCESS_PROXY_PORT`. If no such variable is set, it will exit with an error code and an error message written to its stderr.
 
 If the connection is successful, it will immediately send a handshake to identify itself as a valid ProcessProxy client. The handshake is exactly 34 bytes of ASCII text: `ProcessProxy 0001 f10a7b06cf0f0896`. This consists of:
+
 - Protocol name: "ProcessProxy" (12 bytes)
 - Space separator (1 byte)
 - Protocol version: "0001" (4 bytes)
@@ -24,6 +25,7 @@ The executable will be cross-platform, supporting Windows, macOS, and Linux.
 The protocol for communication between the executable and the TCP server will be a single byte command identifier followed by a per-command specific payload.
 
 All commands return a response with the following format:
+
 - Status code: 4-byte signed integer (0 for success, non-zero for error)
 - If status code is non-zero (error):
   - Error message length: 4-byte unsigned integer
@@ -78,7 +80,7 @@ The function validates each connection by expecting a handshake within 500ms. Th
 ```typescript
 const server = createProxyProcessServer((connection) => {
   // Handle connection
-});
+})
 ```
 
 The function is a thin wrapper around Node.js's `net.createServer()`, returning a standard `Server` instance that supports all native server methods like `listen()`, `close()`, event listeners, etc.
@@ -92,6 +94,7 @@ Represents a connection to a single instance of the native executable. Created a
 Represents a connection to a single instance of the native executable. Created automatically by `createProxyProcessServer` when a native process connects.
 
 Methods:
+
 - `on(event: 'close', listener: () => void)`: Registers an event listener for connection close events
 - `on(event: 'error', listener: (error: Error) => void)`: Registers an event listener for error events
 - `sendCommand(command: number, payload?: Buffer): Promise<Buffer>`: Sends a command to the executable and returns a promise that resolves with the response. The sendCommand will maintain an internal queue of commands to ensure that only one command is in-flight at a time.
@@ -101,9 +104,10 @@ Methods:
 - `exit(code: number): Promise<void>`: Exits the executable with the specified exit code
 
 Properties:
- - `stdin`: Readable stream for the executable's stdin
- - `stdout`: Writable stream for the executable's stdout
- - `stderr`: Writable stream for the executable's stderr
+
+- `stdin`: Readable stream for the executable's stdin
+- `stdout`: Writable stream for the executable's stdout
+- `stderr`: Writable stream for the executable's stderr
 
 The stdin/stdout/stderr streams are implemented using custom Stream derived classes (stdin implements stream.Readable and the others stream.Writable) which internally use the `sendCommand` method to read/write data. The streams support the close method to close the respective stream using the appropriate command.
 

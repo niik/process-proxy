@@ -1,160 +1,160 @@
-import { EventEmitter } from 'events';
-import { Socket } from 'net';
-import { ReadStream } from './read-stream.js';
-import { WriteStream } from './write-stream.js';
+import { EventEmitter } from 'events'
+import { Socket } from 'net'
+import { ReadStream } from './read-stream.js'
+import { WriteStream } from './write-stream.js'
 
 // Command identifiers
-const CMD_GET_ARGS = 0x01;
-const CMD_READ_STDIN = 0x02;
-const CMD_WRITE_STDOUT = 0x03;
-const CMD_WRITE_STDERR = 0x04;
-const CMD_GET_CWD = 0x05;
-const CMD_GET_ENV = 0x06;
-const CMD_EXIT = 0x07;
-const CMD_CLOSE_STDIN = 0x09;
-const CMD_CLOSE_STDOUT = 0x0A;
-const CMD_CLOSE_STDERR = 0x0B;
+const CMD_GET_ARGS = 0x01
+const CMD_READ_STDIN = 0x02
+const CMD_WRITE_STDOUT = 0x03
+const CMD_WRITE_STDERR = 0x04
+const CMD_GET_CWD = 0x05
+const CMD_GET_ENV = 0x06
+const CMD_EXIT = 0x07
+const CMD_CLOSE_STDIN = 0x09
+const CMD_CLOSE_STDOUT = 0x0a
+const CMD_CLOSE_STDERR = 0x0b
 
 interface QueuedCommand {
-  command: number;
-  payload?: Buffer;
-  resolve: (value: Buffer) => void;
-  reject: (error: Error) => void;
+  command: number
+  payload?: Buffer
+  resolve: (value: Buffer) => void
+  reject: (error: Error) => void
 }
 
 export class ProcessProxyConnection extends EventEmitter {
-  private commandQueue: QueuedCommand[] = [];
-  private processingQueue: boolean = false;
-  private receiveBuffer: Buffer = Buffer.allocUnsafe(0);
-  private currentCommand: QueuedCommand | null = null;
-  private expectedResponseLength: number | null = null;
+  private commandQueue: QueuedCommand[] = []
+  private processingQueue: boolean = false
+  private receiveBuffer: Buffer = Buffer.allocUnsafe(0)
+  private currentCommand: QueuedCommand | null = null
+  private expectedResponseLength: number | null = null
 
-  public readonly stdin: ReadStream;
-  public readonly stdout: WriteStream;
-  public readonly stderr: WriteStream;
+  public readonly stdin: ReadStream
+  public readonly stdout: WriteStream
+  public readonly stderr: WriteStream
 
   constructor(private readonly socket: Socket) {
-    super();
-    this.stdin = new ReadStream(this);
-    this.stdout = new WriteStream(this, CMD_WRITE_STDOUT, CMD_CLOSE_STDOUT);
-    this.stderr = new WriteStream(this, CMD_WRITE_STDERR, CMD_CLOSE_STDERR);
+    super()
+    this.stdin = new ReadStream(this)
+    this.stdout = new WriteStream(this, CMD_WRITE_STDOUT, CMD_CLOSE_STDOUT)
+    this.stderr = new WriteStream(this, CMD_WRITE_STDERR, CMD_CLOSE_STDERR)
 
-    this.socket.on('data', (data: Buffer) => this.handleData(data));
-    this.socket.on('close', () => this.handleClose());
-    this.socket.on('error', (error: Error) => this.handleError(error));
+    this.socket.on('data', (data: Buffer) => this.handleData(data))
+    this.socket.on('close', () => this.handleClose())
+    this.socket.on('error', (error: Error) => this.handleError(error))
   }
 
   private handleData(data: Buffer): void {
-    this.receiveBuffer = Buffer.concat([this.receiveBuffer, data]);
-    this.processReceiveBuffer();
+    this.receiveBuffer = Buffer.concat([this.receiveBuffer, data])
+    this.processReceiveBuffer()
   }
 
   private processReceiveBuffer(): void {
     if (!this.currentCommand) {
-      return;
+      return
     }
 
     // All commands now have at least a 4-byte status code
     if (this.receiveBuffer.length < 4) {
-      return; // Need at least status code
+      return // Need at least status code
     }
 
     // Read status code
-    const statusCode = this.receiveBuffer.readInt32LE(0);
+    const statusCode = this.receiveBuffer.readInt32LE(0)
 
     if (statusCode !== 0) {
       // Error response - need status + error message length + error message
       if (this.receiveBuffer.length < 8) {
-        return; // Need at least status + length
+        return // Need at least status + length
       }
 
-      const errorMsgLen = this.receiveBuffer.readUInt32LE(4);
-      const totalErrorLength = 4 + 4 + errorMsgLen; // status + length + message
+      const errorMsgLen = this.receiveBuffer.readUInt32LE(4)
+      const totalErrorLength = 4 + 4 + errorMsgLen // status + length + message
 
       if (this.receiveBuffer.length < totalErrorLength) {
-        return; // Need more data
+        return // Need more data
       }
 
-      const errorMsg = this.receiveBuffer.toString('utf8', 8, 8 + errorMsgLen);
-      this.receiveBuffer = this.receiveBuffer.subarray(totalErrorLength);
-      this.expectedResponseLength = null;
+      const errorMsg = this.receiveBuffer.toString('utf8', 8, 8 + errorMsgLen)
+      this.receiveBuffer = this.receiveBuffer.subarray(totalErrorLength)
+      this.expectedResponseLength = null
 
-      const command = this.currentCommand;
-      this.currentCommand = null;
-      command.reject(new Error(`Command failed: ${errorMsg}`));
+      const command = this.currentCommand
+      this.currentCommand = null
+      command.reject(new Error(`Command failed: ${errorMsg}`))
 
-      this.processNextCommand();
-      return;
+      this.processNextCommand()
+      return
     }
 
     // Success response - determine expected response length based on command
     if (this.expectedResponseLength === null) {
       // Start with 4 bytes for status code
-      let expectedLength = 4;
+      let expectedLength = 4
 
       switch (this.currentCommand.command) {
         case CMD_GET_ARGS: {
           // Response: status + count (4 bytes) + each arg (4 bytes length + data)
           if (this.receiveBuffer.length < 8) {
-            return; // Need at least status + count
+            return // Need at least status + count
           }
-          const count = this.receiveBuffer.readUInt32LE(4);
-          expectedLength += 4; // count
-          let offset = 8;
+          const count = this.receiveBuffer.readUInt32LE(4)
+          expectedLength += 4 // count
+          let offset = 8
 
           for (let i = 0; i < count; i++) {
             if (this.receiveBuffer.length < offset + 4) {
-              return; // Need more data
+              return // Need more data
             }
-            const argLen = this.receiveBuffer.readUInt32LE(offset);
-            expectedLength += 4 + argLen;
-            offset += 4 + argLen;
+            const argLen = this.receiveBuffer.readUInt32LE(offset)
+            expectedLength += 4 + argLen
+            offset += 4 + argLen
           }
 
-          this.expectedResponseLength = expectedLength;
-          break;
+          this.expectedResponseLength = expectedLength
+          break
         }
 
         case CMD_READ_STDIN: {
           // Response: status + bytes_read (4 bytes) + data
           if (this.receiveBuffer.length < 8) {
-            return; // Need at least status + bytes_read
+            return // Need at least status + bytes_read
           }
-          const bytesRead = this.receiveBuffer.readInt32LE(4);
-          this.expectedResponseLength = 4 + 4 + Math.max(0, bytesRead);
-          break;
+          const bytesRead = this.receiveBuffer.readInt32LE(4)
+          this.expectedResponseLength = 4 + 4 + Math.max(0, bytesRead)
+          break
         }
 
         case CMD_GET_CWD: {
           // Response: status + length (4 bytes) + string
           if (this.receiveBuffer.length < 8) {
-            return; // Need at least status + length
+            return // Need at least status + length
           }
-          const len = this.receiveBuffer.readUInt32LE(4);
-          this.expectedResponseLength = 4 + 4 + len;
-          break;
+          const len = this.receiveBuffer.readUInt32LE(4)
+          this.expectedResponseLength = 4 + 4 + len
+          break
         }
 
         case CMD_GET_ENV: {
           // Response: status + count (4 bytes) + each env var (4 bytes length + data)
           if (this.receiveBuffer.length < 8) {
-            return; // Need at least status + count
+            return // Need at least status + count
           }
-          const count = this.receiveBuffer.readUInt32LE(4);
-          expectedLength += 4; // count
-          let offset = 8;
+          const count = this.receiveBuffer.readUInt32LE(4)
+          expectedLength += 4 // count
+          let offset = 8
 
           for (let i = 0; i < count; i++) {
             if (this.receiveBuffer.length < offset + 4) {
-              return; // Need more data
+              return // Need more data
             }
-            const varLen = this.receiveBuffer.readUInt32LE(offset);
-            expectedLength += 4 + varLen;
-            offset += 4 + varLen;
+            const varLen = this.receiveBuffer.readUInt32LE(offset)
+            expectedLength += 4 + varLen
+            offset += 4 + varLen
           }
 
-          this.expectedResponseLength = expectedLength;
-          break;
+          this.expectedResponseLength = expectedLength
+          break
         }
 
         case CMD_WRITE_STDOUT:
@@ -164,144 +164,149 @@ export class ProcessProxyConnection extends EventEmitter {
         case CMD_CLOSE_STDOUT:
         case CMD_CLOSE_STDERR:
           // These commands only return status code (no additional data on success)
-          this.expectedResponseLength = 4;
-          break;
+          this.expectedResponseLength = 4
+          break
 
         default:
-          this.currentCommand.reject(new Error('Unknown command'));
-          this.currentCommand = null;
-          this.expectedResponseLength = null;
-          this.processNextCommand();
-          return;
+          this.currentCommand.reject(new Error('Unknown command'))
+          this.currentCommand = null
+          this.expectedResponseLength = null
+          this.processNextCommand()
+          return
       }
     }
 
     // Check if we have received the complete response
     if (this.receiveBuffer.length >= this.expectedResponseLength) {
-      const response = this.receiveBuffer.subarray(0, this.expectedResponseLength);
-      this.receiveBuffer = this.receiveBuffer.subarray(this.expectedResponseLength);
-      this.expectedResponseLength = null;
+      const response = this.receiveBuffer.subarray(
+        0,
+        this.expectedResponseLength,
+      )
+      this.receiveBuffer = this.receiveBuffer.subarray(
+        this.expectedResponseLength,
+      )
+      this.expectedResponseLength = null
 
-      const command = this.currentCommand;
-      this.currentCommand = null;
-      command.resolve(response);
+      const command = this.currentCommand
+      this.currentCommand = null
+      command.resolve(response)
 
-      this.processNextCommand();
+      this.processNextCommand()
     }
   }
 
   private handleClose(): void {
     if (this.currentCommand) {
-      this.currentCommand.reject(new Error('Connection closed'));
-      this.currentCommand = null;
+      this.currentCommand.reject(new Error('Connection closed'))
+      this.currentCommand = null
     }
 
     for (const cmd of this.commandQueue) {
-      cmd.reject(new Error('Connection closed'));
+      cmd.reject(new Error('Connection closed'))
     }
-    this.commandQueue = [];
+    this.commandQueue = []
 
-    this.emit('close');
+    this.emit('close')
   }
 
   private handleError(error: Error): void {
-    this.emit('error', error);
+    this.emit('error', error)
   }
 
   public sendCommand(command: number, payload?: Buffer): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      this.commandQueue.push({ command, payload, resolve, reject });
-      this.processNextCommand();
-    });
+      this.commandQueue.push({ command, payload, resolve, reject })
+      this.processNextCommand()
+    })
   }
 
   private processNextCommand(): void {
     if (this.processingQueue || this.currentCommand) {
-      return;
+      return
     }
 
     if (this.commandQueue.length === 0) {
-      return;
+      return
     }
 
-    this.processingQueue = true;
-    this.currentCommand = this.commandQueue.shift()!;
+    this.processingQueue = true
+    this.currentCommand = this.commandQueue.shift()!
 
     // Build command packet
-    const cmdByte = Buffer.from([this.currentCommand.command]);
+    const cmdByte = Buffer.from([this.currentCommand.command])
     const packet = this.currentCommand.payload
       ? Buffer.concat([cmdByte, this.currentCommand.payload])
-      : cmdByte;
+      : cmdByte
 
     // Send command
     this.socket.write(packet, (error) => {
-      this.processingQueue = false;
+      this.processingQueue = false
 
       if (error) {
-        const cmd = this.currentCommand!;
-        this.currentCommand = null;
-        cmd.reject(error);
-        this.processNextCommand();
-        return;
+        const cmd = this.currentCommand!
+        this.currentCommand = null
+        cmd.reject(error)
+        this.processNextCommand()
+        return
       }
 
       // All commands now expect a response with status code
-    });
+    })
   }
 
   public async getArgs(): Promise<string[]> {
-    const response = await this.sendCommand(CMD_GET_ARGS);
-    const args: string[] = [];
-    let offset = 4; // Skip status code
+    const response = await this.sendCommand(CMD_GET_ARGS)
+    const args: string[] = []
+    let offset = 4 // Skip status code
 
-    const count = response.readUInt32LE(offset);
-    offset += 4;
+    const count = response.readUInt32LE(offset)
+    offset += 4
 
     for (let i = 0; i < count; i++) {
-      const len = response.readUInt32LE(offset);
-      offset += 4;
-      const arg = response.toString('utf8', offset, offset + len);
-      offset += len;
-      args.push(arg);
+      const len = response.readUInt32LE(offset)
+      offset += 4
+      const arg = response.toString('utf8', offset, offset + len)
+      offset += len
+      args.push(arg)
     }
 
-    return args;
+    return args
   }
 
   public async getEnv(): Promise<{ [key: string]: string }> {
-    const response = await this.sendCommand(CMD_GET_ENV);
-    const env: { [key: string]: string } = {};
-    let offset = 4; // Skip status code
+    const response = await this.sendCommand(CMD_GET_ENV)
+    const env: { [key: string]: string } = {}
+    let offset = 4 // Skip status code
 
-    const count = response.readUInt32LE(offset);
-    offset += 4;
+    const count = response.readUInt32LE(offset)
+    offset += 4
 
     for (let i = 0; i < count; i++) {
-      const len = response.readUInt32LE(offset);
-      offset += 4;
-      const envVar = response.toString('utf8', offset, offset + len);
-      offset += len;
+      const len = response.readUInt32LE(offset)
+      offset += 4
+      const envVar = response.toString('utf8', offset, offset + len)
+      offset += len
 
-      const eqIndex = envVar.indexOf('=');
+      const eqIndex = envVar.indexOf('=')
       if (eqIndex !== -1) {
-        const key = envVar.substring(0, eqIndex);
-        const value = envVar.substring(eqIndex + 1);
-        env[key] = value;
+        const key = envVar.substring(0, eqIndex)
+        const value = envVar.substring(eqIndex + 1)
+        env[key] = value
       }
     }
 
-    return env;
+    return env
   }
 
   public async getCwd(): Promise<string> {
-    const response = await this.sendCommand(CMD_GET_CWD);
-    const len = response.readUInt32LE(4); // Skip status code at offset 0
-    return response.toString('utf8', 8, 8 + len);
+    const response = await this.sendCommand(CMD_GET_CWD)
+    const len = response.readUInt32LE(4) // Skip status code at offset 0
+    return response.toString('utf8', 8, 8 + len)
   }
 
   public async exit(code: number): Promise<void> {
-    const payload = Buffer.allocUnsafe(4);
-    payload.writeInt32LE(code, 0);
-    await this.sendCommand(CMD_EXIT, payload);
+    const payload = Buffer.allocUnsafe(4)
+    payload.writeInt32LE(code, 0)
+    await this.sendCommand(CMD_EXIT, payload)
   }
 }

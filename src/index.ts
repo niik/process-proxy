@@ -1,13 +1,13 @@
-import { createServer, ServerOpts, Socket } from "net";
-import { ProcessProxyConnection } from "./connection.js";
-export { ProcessProxyConnection } from "./connection.js";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-import { platform } from "os";
+import { createServer, ServerOpts, Socket } from 'net'
+import { ProcessProxyConnection } from './connection.js'
+export { ProcessProxyConnection } from './connection.js'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+import { platform } from 'os'
 
-const HANDSHAKE = "ProcessProxy 0001 f10a7b06cf0f0896";
-const HANDSHAKE_LENGTH = 34;
-const HANDSHAKE_TIMEOUT = 500;
+const HANDSHAKE = 'ProcessProxy 0001 f10a7b06cf0f0896'
+const HANDSHAKE_LENGTH = 34
+const HANDSHAKE_TIMEOUT = 500
 
 /**
  * Creates a TCP server that listens for incoming connections from native processes.
@@ -21,59 +21,62 @@ const HANDSHAKE_TIMEOUT = 500;
  */
 export const createProxyProcessServer = (
   listener: (conn: ProcessProxyConnection) => void,
-  options?: ServerOpts
+  options?: ServerOpts,
 ) =>
-  createServer(options, async (socket) => {
+  createServer(options, (socket) => {
     ensureValidHandshake(socket)
       .then(() => listener(new ProcessProxyConnection(socket)))
-      .catch(() => socket.destroy());
-  });
+      .catch(() => socket.destroy())
+  })
 
 const ensureValidHandshake = (socket: Socket) => {
   return new Promise<Socket>((resolve, reject) => {
-    let buffer = Buffer.allocUnsafe(0);
+    let buffer = Buffer.allocUnsafe(0)
 
-    const timeout = setTimeout(() => reject(new Error('timeout')), HANDSHAKE_TIMEOUT);
-    const onError = (error: Error) => { 
-      reject(error);
+    const timeout = setTimeout(
+      () => reject(new Error('timeout')),
+      HANDSHAKE_TIMEOUT,
+    )
+    const onError = (error: Error) => {
+      reject(error)
       clearTimeout(timeout)
     }
 
     const onClose = () => {
-      reject(new Error('closed'));
+      reject(new Error('closed'))
       clearTimeout(timeout)
     }
-    
+
     const onData = (data: Buffer) => {
-      buffer = Buffer.concat([buffer, data]);
+      buffer = Buffer.concat([buffer, data])
 
       if (buffer.length >= HANDSHAKE_LENGTH) {
-        const handshake = buffer.subarray(0, HANDSHAKE_LENGTH).toString("ascii");
+        const handshake = buffer.subarray(0, HANDSHAKE_LENGTH).toString('ascii')
 
         if (handshake !== HANDSHAKE) {
-          reject(new Error("Invalid handshake"));
-          return;
+          reject(new Error('Invalid handshake'))
+          return
         }
 
-        clearTimeout(timeout);
-        socket.off("data", onData);
-        socket.off("close", onClose);
-        socket.off("error", onError);
+        clearTimeout(timeout)
+        socket.off('data', onData)
+        socket.off('close', onClose)
+        socket.off('error', onError)
 
         // If there's data after the handshake, put it back
         if (buffer.length > HANDSHAKE_LENGTH) {
-          socket.unshift(buffer.subarray(HANDSHAKE_LENGTH));
+          socket.unshift(buffer.subarray(HANDSHAKE_LENGTH))
         }
 
-        resolve(socket);
+        resolve(socket)
       }
-    };
+    }
 
-    socket.on("data", onData);
-    socket.on("close", onClose);
-    socket.on("error", onError);
-  });
-};
+    socket.on('data', onData)
+    socket.on('close', onClose)
+    socket.on('error', onError)
+  })
+}
 
 /**
  * Returns the absolute path to the native proxy executable.
@@ -83,13 +86,13 @@ const ensureValidHandshake = (socket: Socket) => {
  */
 export function getProxyCommandPath(): string {
   // Get the directory of this module
-  const moduleUrl = import.meta.url;
-  const modulePath = fileURLToPath(moduleUrl);
-  const moduleDir = dirname(modulePath);
+  const moduleUrl = import.meta.url
+  const modulePath = fileURLToPath(moduleUrl)
+  const moduleDir = dirname(modulePath)
 
   // Navigate from dist/ to the project root, then to build/Release/
   const executableName =
-    platform() === "win32" ? "process-proxy.exe" : "process-proxy";
+    platform() === 'win32' ? 'process-proxy.exe' : 'process-proxy'
 
-  return join(moduleDir, "..", "build", "Release", executableName);
+  return join(moduleDir, '..', 'build', 'Release', executableName)
 }

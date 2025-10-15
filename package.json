@@ -23,7 +23,9 @@
     "example:secure": "tsx examples/secure.ts",
     "example:handshake-timeout": "tsx examples/handshake-timeout.ts",
     "example:handshake-invalid": "tsx examples/handshake-invalid.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "prettier --check .",
+    "format": "prettier --write ."
   },
   "keywords": [
     "process",
@@ -42,6 +44,7 @@
   "devDependencies": {
     "@types/node": "^24.7.2",
     "node-gyp": "^11.4.2",
+    "prettier": "^3.6.2",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   },

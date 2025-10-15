@@ -34,48 +34,48 @@ This will compile both the TypeScript library and the native C executable.
 ### Basic Example
 
 ```typescript
-import { createProxyProcessServer, getProxyCommandPath } from 'process-proxy';
-import { spawn } from 'child_process';
-import { AddressInfo } from 'net';
+import { createProxyProcessServer, getProxyCommandPath } from 'process-proxy'
+import { spawn } from 'child_process'
+import { AddressInfo } from 'net'
 
 // Create server with connection callback (idiomatic Node.js style)
 const server = createProxyProcessServer((connection) => {
-  console.log('Native process connected!');
-  
+  console.log('Native process connected!')
+
   // Get process information
-  connection.getArgs().then(args => console.log('Arguments:', args));
-  connection.getEnv().then(env => console.log('Environment:', env));
-  connection.getCwd().then(cwd => console.log('Working Directory:', cwd));
-  
+  connection.getArgs().then((args) => console.log('Arguments:', args))
+  connection.getEnv().then((env) => console.log('Environment:', env))
+  connection.getCwd().then((cwd) => console.log('Working Directory:', cwd))
+
   // Write to the process stdout
-  connection.stdout.write('Hello from ProcessProxy!\n');
-  
+  connection.stdout.write('Hello from ProcessProxy!\n')
+
   // Read from the process stdin
   connection.stdin.on('data', (data) => {
-    console.log('Received from stdin:', data.toString());
-  });
-  
+    console.log('Received from stdin:', data.toString())
+  })
+
   // Handle connection close
   connection.on('close', () => {
-    console.log('Process disconnected');
-  });
-});
+    console.log('Process disconnected')
+  })
+})
 
 // Start listening on a random port
 const port = await new Promise<number>((resolve) => {
   server.listen(0, '127.0.0.1', () => {
-    resolve((server.address() as AddressInfo).port);
-  });
-});
+    resolve((server.address() as AddressInfo).port)
+  })
+})
 
 // Launch the native executable with the port in environment
-const nativeExe = getProxyCommandPath();
+const nativeExe = getProxyCommandPath()
 const child = spawn(nativeExe, ['arg1', 'arg2'], {
   env: {
     ...process.env,
-    PROCESS_PROXY_PORT: port.toString()
-  }
-});
+    PROCESS_PROXY_PORT: port.toString(),
+  },
+})
 
 // Later, close the server
 // server.close();
@@ -86,17 +86,17 @@ const child = spawn(nativeExe, ['arg1', 'arg2'], {
 ```typescript
 server.on('connection', (connection) => {
   // Pipe process stdin to our stdin
-  process.stdin.pipe(connection.stdout);
-  
+  process.stdin.pipe(connection.stdout)
+
   // Pipe process stdout to our stdout
-  connection.stdin.pipe(process.stdout);
-  
+  connection.stdin.pipe(process.stdout)
+
   // Pipe process stderr to our stderr
   // (Note: stderr is a writable stream on the connection)
   connection.stderr.on('data', (data) => {
-    process.stderr.write(data);
-  });
-});
+    process.stderr.write(data)
+  })
+})
 ```
 
 ### Controlling the Process
@@ -104,8 +104,8 @@ server.on('connection', (connection) => {
 ```typescript
 server.on('connection', async (connection) => {
   // Exit the process with a specific code
-  await connection.exit(0);
-});
+  await connection.exit(0)
+})
 ```
 
 ### Closing Streams
@@ -113,10 +113,10 @@ server.on('connection', async (connection) => {
 ```typescript
 server.on('connection', async (connection) => {
   // Close individual streams
-  await connection.stdin.close();
-  await connection.stdout.close();
-  await connection.stderr.close();
-});
+  await connection.stdin.close()
+  await connection.stdout.close()
+  await connection.stderr.close()
+})
 ```
 
 ## API
@@ -126,29 +126,30 @@ server.on('connection', async (connection) => {
 Creates a TCP server that listens for incoming connections from native processes. Returns a standard Node.js `net.Server` instance.
 
 ```typescript
-import { createProxyProcessServer } from 'process-proxy';
-import { AddressInfo } from 'net';
+import { createProxyProcessServer } from 'process-proxy'
+import { AddressInfo } from 'net'
 
 // Create server with connection callback
 const server = createProxyProcessServer((connection) => {
-  console.log('New connection!');
-  connection.getArgs().then(console.log);
-});
+  console.log('New connection!')
+  connection.getArgs().then(console.log)
+})
 
 // Start listening
 const port = await new Promise<number>((resolve) => {
   server.listen(0, '127.0.0.1', () => {
-    resolve((server.address() as AddressInfo).port);
-  });
-});
+    resolve((server.address() as AddressInfo).port)
+  })
+})
 
 // Use standard server methods
-server.on('listening', () => console.log('Server started'));
-server.on('error', (err) => console.error('Server error:', err));
-server.close(() => console.log('Server closed'));
+server.on('listening', () => console.log('Server started'))
+server.on('error', (err) => console.error('Server error:', err))
+server.close(() => console.log('Server closed'))
 ```
 
 **Parameters:**
+
 - `listener: (connection: ProcessProxyConnection) => void` - Callback invoked for each incoming connection
 - `options?: ServerOpts` - Optional Node.js server options (see `net.createServer`)
 
@@ -159,13 +160,14 @@ server.close(() => console.log('Server closed'));
 Returns the absolute path to the native proxy executable.
 
 ```typescript
-import { getProxyCommandPath } from 'process-proxy';
+import { getProxyCommandPath } from 'process-proxy'
 
-const executablePath = getProxyCommandPath();
+const executablePath = getProxyCommandPath()
 // Returns: '/path/to/build/Release/process-proxy' (or .exe on Windows)
 ```
 
 This utility function automatically:
+
 - Resolves the correct path relative to the installed package
 - Adds the `.exe` suffix on Windows
 - Works regardless of where the package is installed
@@ -225,47 +227,46 @@ The TCP server only listens on localhost (127.0.0.1), but this does not provide 
 Example security implementation:
 
 ```typescript
-import crypto from 'crypto';
-import { createProxyProcessServer, getProxyCommandPath } from 'process-proxy';
-import { spawn } from 'child_process';
-import { AddressInfo } from 'net';
+import crypto from 'crypto'
+import { createProxyProcessServer, getProxyCommandPath } from 'process-proxy'
+import { spawn } from 'child_process'
+import { AddressInfo } from 'net'
 
-const secret = crypto.randomBytes(32).toString('hex');
+const secret = crypto.randomBytes(32).toString('hex')
 
 const server = createProxyProcessServer(async (connection) => {
   try {
-    const env = await connection.getEnv();
-    
+    const env = await connection.getEnv()
+
     if (env.PROCESS_PROXY_SECRET !== secret) {
-      console.error('Unauthorized connection attempt!');
-      await connection.exit(1);
-      return;
+      console.error('Unauthorized connection attempt!')
+      await connection.exit(1)
+      return
     }
-    
+
     // Connection is authenticated, proceed normally
-    console.log('Authenticated connection established');
-    
+    console.log('Authenticated connection established')
   } catch (error) {
-    console.error('Error during authentication:', error);
-    await connection.exit(1);
+    console.error('Error during authentication:', error)
+    await connection.exit(1)
   }
-});
+})
 
 // Start listening
 const port = await new Promise<number>((resolve) => {
   server.listen(0, '127.0.0.1', () => {
-    resolve((server.address() as AddressInfo).port);
-  });
-});
+    resolve((server.address() as AddressInfo).port)
+  })
+})
 
 // Launch with secret
 const child = spawn(getProxyCommandPath(), [], {
   env: {
     ...process.env,
     PROCESS_PROXY_PORT: port.toString(),
-    PROCESS_PROXY_SECRET: secret
-  }
-});
+    PROCESS_PROXY_SECRET: secret,
+  },
+})
 ```
 
 ## Platform Support
