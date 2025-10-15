@@ -90,7 +90,7 @@ While the TCP server will only be accessible on localhost additional security me
 
 ## Design document
 
-As the project progresses, this design document should be updated to reflect noteworthy changes or additions to the architecture or implementation details.
+As the project progresses, and the project changes in such a way that it conflicts with the contents of this design document the document should be updated to reflect the new reality. In a similar vein we should update the design document for significant architectural or implementation changes such as new commands being added. It should not however be used as a changelog document.
 
 ## Version control
 
