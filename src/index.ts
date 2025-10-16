@@ -8,17 +8,17 @@ import { readSocket } from './read-socket.js'
 
 const HANDSHAKE_PROTOCOL = 'ProcessProxy 0001 '
 const HANDSHAKE_PROTOCOL_LENGTH = 18
-const HANDSHAKE_NONCE_LENGTH = 128
-const HANDSHAKE_LENGTH = HANDSHAKE_PROTOCOL_LENGTH + HANDSHAKE_NONCE_LENGTH // 146 bytes
+const HANDSHAKE_SECRET_LENGTH = 128
+const HANDSHAKE_LENGTH = HANDSHAKE_PROTOCOL_LENGTH + HANDSHAKE_SECRET_LENGTH // 146 bytes
 const HANDSHAKE_TIMEOUT = 1000
 
 export interface ProxyProcessServerOptions extends ServerOpts {
   /**
-   * Optional callback to validate the connection nonce.
-   * Receives the nonce string and should return a Promise<boolean>.
+   * Optional callback to validate the connection secret.
+   * Receives the secret string and should return a Promise<boolean>.
    * If false, the connection will be rejected.
    */
-  validateConnection?: (nonce: string) => Promise<boolean>
+  validateConnection?: (secret: string) => Promise<boolean>
 }
 
 /**
@@ -46,7 +46,7 @@ export const createProxyProcessServer = (
 
 const ensureValidHandshake = async (
   socket: Socket,
-  validateConnection?: (nonce: string) => Promise<boolean>,
+  validateConnection?: (secret: string) => Promise<boolean>,
 ) => {
   const buffer = await readSocket(
     socket,
@@ -64,18 +64,18 @@ const ensureValidHandshake = async (
 
   // Validate connection if callback provided
   if (validateConnection) {
-    // Parse nonce (128 bytes) - read until first null byte
-    const nonceBuffer = buffer.subarray(
+    // Parse secret (128 bytes) - read until first null byte
+    const secretBuffer = buffer.subarray(
       HANDSHAKE_PROTOCOL_LENGTH,
       HANDSHAKE_LENGTH,
     )
-    const nullIndex = nonceBuffer.indexOf(0)
-    const nonce =
+    const nullIndex = secretBuffer.indexOf(0)
+    const secret =
       nullIndex === -1
-        ? nonceBuffer.toString('utf8')
-        : nonceBuffer.subarray(0, nullIndex).toString('utf8')
+        ? secretBuffer.toString('utf8')
+        : secretBuffer.subarray(0, nullIndex).toString('utf8')
 
-    if (!(await validateConnection(nonce))) {
+    if (!(await validateConnection(secret))) {
       throw new Error('Connection validation failed')
     }
   }

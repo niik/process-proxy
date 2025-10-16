@@ -91,8 +91,8 @@ async function main() {
         })
     },
     {
-      validateConnection: process.env.PROCESS_PROXY_NONCE
-        ? async (nonce) => nonce === process.env.PROCESS_PROXY_NONCE
+      validateConnection: process.env.PROCESS_PROXY_SECRET
+        ? async (secret) => secret === process.env.PROCESS_PROXY_SECRET
         : undefined,
     },
   )

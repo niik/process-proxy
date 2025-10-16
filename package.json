@@ -24,7 +24,7 @@
     "example:secure": "tsx examples/secure.ts",
     "example:handshake-timeout": "tsx examples/handshake-timeout.ts",
     "example:handshake-invalid": "tsx examples/handshake-invalid.ts",
-    "example:nonce-validation": "tsx examples/nonce-validation.ts",
+    "example:nonce-validation": "tsx examples/secret-validation.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "prettier --check .",
     "format": "prettier --write ."
