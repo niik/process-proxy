@@ -5,9 +5,20 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { platform } from 'os'
 
-const HANDSHAKE = 'ProcessProxy 0001 f10a7b06cf0f0896'
-const HANDSHAKE_LENGTH = 34
+const HANDSHAKE_PROTOCOL = 'ProcessProxy 0001 '
+const HANDSHAKE_PROTOCOL_LENGTH = 18
+const HANDSHAKE_NONCE_LENGTH = 128
+const HANDSHAKE_LENGTH = HANDSHAKE_PROTOCOL_LENGTH + HANDSHAKE_NONCE_LENGTH // 146 bytes
 const HANDSHAKE_TIMEOUT = 500
+
+export interface ProxyProcessServerOptions extends ServerOpts {
+  /**
+   * Optional callback to validate the connection nonce.
+   * Receives the nonce string and should return a Promise<boolean>.
+   * If false, the connection will be rejected.
+   */
+  validateConnection?: (nonce: string) => Promise<boolean>
+}
 
 /**
  * Creates a TCP server that listens for incoming connections from native processes.
@@ -16,21 +27,27 @@ const HANDSHAKE_TIMEOUT = 500
  * instance and passed to the listener callback.
  *
  * @param listener A callback function that is invoked for each incoming connection.
- * @param options Optional server options (see Node.js net.createServer).
+ * @param options Optional server options including validateConnection callback.
  * @returns A TCP server instance.
  */
 export const createProxyProcessServer = (
   listener: (conn: ProcessProxyConnection) => void,
-  options?: ServerOpts,
-) =>
-  createServer(options, (socket) => {
-    ensureValidHandshake(socket)
+  options?: ProxyProcessServerOptions,
+) => {
+  const { validateConnection, ...serverOpts } = options || {}
+  
+  return createServer(serverOpts, (socket) => {
+    ensureValidHandshake(socket, validateConnection)
       .then(() => listener(new ProcessProxyConnection(socket)))
       .catch(() => socket.destroy())
   })
+}
 
-const ensureValidHandshake = (socket: Socket) => {
-  return new Promise<Socket>((resolve, reject) => {
+const ensureValidHandshake = (
+  socket: Socket,
+  validateConnection?: (nonce: string) => Promise<boolean>,
+) => {
+  return new Promise<Socket>(async (resolve, reject) => {
     let buffer = Buffer.allocUnsafe(0)
 
     const timeout = setTimeout(
@@ -47,15 +64,43 @@ const ensureValidHandshake = (socket: Socket) => {
       clearTimeout(timeout)
     }
 
-    const onData = (data: Buffer) => {
+    const onData = async (data: Buffer) => {
       buffer = Buffer.concat([buffer, data])
 
       if (buffer.length >= HANDSHAKE_LENGTH) {
-        const handshake = buffer.subarray(0, HANDSHAKE_LENGTH).toString('ascii')
+        // Parse protocol header (18 bytes)
+        const protocolHeader = buffer
+          .subarray(0, HANDSHAKE_PROTOCOL_LENGTH)
+          .toString('ascii')
 
-        if (handshake !== HANDSHAKE) {
-          reject(new Error('Invalid handshake'))
+        if (protocolHeader !== HANDSHAKE_PROTOCOL) {
+          reject(new Error('Invalid handshake protocol'))
           return
+        }
+
+        // Parse nonce (128 bytes) - read until first null byte
+        const nonceBuffer = buffer.subarray(
+          HANDSHAKE_PROTOCOL_LENGTH,
+          HANDSHAKE_LENGTH,
+        )
+        const nullIndex = nonceBuffer.indexOf(0)
+        const nonce =
+          nullIndex === -1
+            ? nonceBuffer.toString('utf8')
+            : nonceBuffer.subarray(0, nullIndex).toString('utf8')
+
+        // Validate connection if callback provided
+        if (validateConnection) {
+          try {
+            const isValid = await validateConnection(nonce)
+            if (!isValid) {
+              reject(new Error('Connection validation failed'))
+              return
+            }
+          } catch (error) {
+            reject(error)
+            return
+          }
         }
 
         clearTimeout(timeout)

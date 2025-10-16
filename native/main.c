@@ -668,9 +668,26 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Send handshake
-    const char* handshake = "ProcessProxy 0001 f10a7b06cf0f0896";
-    if (send(g_socket, handshake, 34, 0) != 34) {
+    // Send handshake: "ProcessProxy 0001 " (18 bytes) + nonce (128 bytes) = 146 bytes total
+    char handshake[146];
+    memset(handshake, 0, sizeof(handshake));
+    
+    // Copy protocol header (18 bytes including trailing space)
+    memcpy(handshake, "ProcessProxy 0001 ", 18);
+    
+    // Get nonce from environment variable
+    const char* nonce_env = getenv("PROCESS_PROXY_NONCE");
+    if (nonce_env != NULL) {
+        // Copy nonce, up to 128 bytes (remaining bytes stay as null padding)
+        size_t nonce_len = strlen(nonce_env);
+        if (nonce_len > 128) {
+            nonce_len = 128;
+        }
+        memcpy(handshake + 18, nonce_env, nonce_len);
+    }
+    // If nonce_env is NULL or empty, the nonce portion remains null-padded
+    
+    if (send(g_socket, handshake, 146, 0) != 146) {
         fprintf(stderr, "Error: Failed to send handshake\n");
         close_socket(g_socket);
 #ifdef _WIN32

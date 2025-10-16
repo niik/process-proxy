@@ -75,12 +75,30 @@ The TypeScript library provides a high-level API for interacting with the native
 
 A factory function that creates a standard Node.js `net.Server` configured to handle connections from the native executable. It accepts a callback that receives a `ProcessProxyConnection` instance for each incoming connection.
 
-The function validates each connection by expecting a handshake within 500ms. The handshake must be exactly 34 bytes: `ProcessProxy 0001 f10a7b06cf0f0896`. Connections that don't send a valid handshake or don't send it within the timeout are immediately closed. This prevents random TCP connections from being processed.
+The function validates each connection by expecting a handshake within 500ms. The handshake must be exactly 146 bytes:
+- Protocol header: "ProcessProxy 0001 " (18 bytes)
+- Nonce: 128 bytes
+
+Connections that don't send a valid handshake or don't send it within the timeout are immediately closed. This prevents random TCP connections from being processed.
+
+The function accepts an optional `validateConnection` callback in its options parameter. This callback receives the nonce string (read from the handshake up until the first null byte) and should return a Promise<boolean>. If the promise resolves to false, the connection is immediately closed. This allows applications to implement custom authentication schemes such as:
+- Pre-shared secret validation
+- Token-based authentication
+- Database lookup of valid nonces
+- Time-based one-time password (TOTP) validation
 
 ```typescript
-const server = createProxyProcessServer((connection) => {
-  // Handle connection
-})
+const server = createProxyProcessServer(
+  (connection) => {
+    // Handle connection
+  },
+  {
+    validateConnection: async (nonce) => {
+      // Custom validation logic
+      return nonce === expectedValue
+    },
+  },
+)
 ```
 
 The function is a thin wrapper around Node.js's `net.createServer()`, returning a standard `Server` instance that supports all native server methods like `listen()`, `close()`, event listeners, etc.
