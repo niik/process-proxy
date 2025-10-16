@@ -1,7 +1,7 @@
 {
   "name": "process-proxy",
   "version": "1.0.0",
-  "description": "A modern npm package that enables developers to interact with a native executable, reading its stdin, writing to its stdout, and stderr streams",
+  "description": "Control a native executable proxy from Node, reading its stdin, writing to its stdout, and stderr streams",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

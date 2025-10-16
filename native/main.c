@@ -280,10 +280,11 @@ static int handle_write_stdout(socket_t sock) {
     if (read_full(sock, &len, sizeof(len)) < 0) {
         return -1;
     }
-    
+
     if (len == 0) {
         return send_success(sock);
     }
+
     
     // Read data
     uint8_t* buffer = (uint8_t*)malloc(len);
@@ -689,7 +690,7 @@ int main(int argc, char* argv[]) {
         }
         
         int handler_result = 0;
-        
+
         switch (cmd) {
             case CMD_GET_ARGS:
                 handler_result = handle_get_args(g_socket);
