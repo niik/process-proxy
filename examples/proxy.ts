@@ -23,72 +23,79 @@ const waitForWritableFinished = (stream: Writable) => {
 }
 
 async function main() {
-  const server = createProxyProcessServer(async (connection) => {
-    // Get process information
-    const [argv, env, cwd] = await Promise.all([
-      connection.getArgs(),
-      connection.getEnv(),
-      connection.getCwd(),
-    ])
+  const server = createProxyProcessServer(
+    async (connection) => {
+      // Get process information
+      const [argv, env, cwd] = await Promise.all([
+        connection.getArgs(),
+        connection.getEnv(),
+        connection.getCwd(),
+      ])
 
-    delete env.PROCESS_PROXY_PORT
-    const cmd = argv.at(1)
-    const args = argv.slice(2)
+      delete env.PROCESS_PROXY_PORT
+      const cmd = argv.at(1)
+      const args = argv.slice(2)
 
-    const id = `${cmd}${args.length ? ' ' + args.join(' ') : ''}`
+      const id = `${cmd}${args.length ? ' ' + args.join(' ') : ''}`
 
-    if (!cmd) {
-      console.error(`${id}: ERROR: No command provided to proxy`)
-      await connection.writeStderr(
-        Buffer.from(
-          `Error: No command provided to proxy\nUsage: ${argv[0]} <command> [args...]\n`,
-          'utf-8',
-        ),
-      )
-      await connection.exit(1)
-      return
-    }
-
-    connection.on('close', () => {
-      console.log(`${id}: connection closed`)
-      if (child.connected) {
-        child.kill()
-      }
-      // TODO: Also ensure child process is killed?
-    })
-
-    console.log(`${id}: executing in ${cwd}`)
-
-    const child = spawn(cmd, args, { env, cwd })
-      .on('spawn', () => {
-        // Pipe data between the native process and copilot
-        connection.stdin.pipe(child.stdin)
-        child.stdout.pipe(connection.stdout)
-        child.stderr.pipe(connection.stderr)
-
-        child.on('close', async (code, signal) => {
-          // Ensure all data is flushed to the copilot before exiting
-          // the connection
-          await Promise.all([
-            waitForWritableFinished(connection.stdout),
-            waitForWritableFinished(connection.stderr),
-          ])
-
-          console.log(`${id}: exiting proxy with code ${code}`)
-          await connection.exit(code ?? 0)
-        })
-      })
-      .on('error', async (err) => {
-        console.error(`${id}: Failed to start child:`, err)
+      if (!cmd) {
+        console.error(`${id}: ERROR: No command provided to proxy`)
         await connection.writeStderr(
           Buffer.from(
-            `Error: Failed to start command: ${err.message}\n`,
+            `Error: No command provided to proxy\nUsage: ${argv[0]} <command> [args...]\n`,
             'utf-8',
           ),
         )
         await connection.exit(1)
+        return
+      }
+
+      connection.on('close', () => {
+        console.log(`${id}: connection closed`)
+        if (child.connected) {
+          child.kill()
+        }
+        // TODO: Also ensure child process is killed?
       })
-  })
+
+      console.log(`${id}: executing in ${cwd}`)
+
+      const child = spawn(cmd, args, { env, cwd })
+        .on('spawn', () => {
+          // Pipe data between the native process and copilot
+          connection.stdin.pipe(child.stdin)
+          child.stdout.pipe(connection.stdout)
+          child.stderr.pipe(connection.stderr)
+
+          child.on('close', async (code, signal) => {
+            // Ensure all data is flushed to the copilot before exiting
+            // the connection
+            await Promise.all([
+              waitForWritableFinished(connection.stdout),
+              waitForWritableFinished(connection.stderr),
+            ])
+
+            console.log(`${id}: exiting proxy with code ${code}`)
+            await connection.exit(code ?? 0)
+          })
+        })
+        .on('error', async (err) => {
+          console.error(`${id}: Failed to start child:`, err)
+          await connection.writeStderr(
+            Buffer.from(
+              `Error: Failed to start command: ${err.message}\n`,
+              'utf-8',
+            ),
+          )
+          await connection.exit(1)
+        })
+    },
+    {
+      validateConnection: process.env.PROCESS_PROXY_NONCE
+        ? async (nonce) => nonce === process.env.PROCESS_PROXY_NONCE
+        : undefined,
+    },
+  )
 
   const envPort = parseInt(process.env.PROCESS_PROXY_PORT ?? '0')
   const port = await new Promise<number>((resolve, reject) => {

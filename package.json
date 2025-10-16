@@ -20,6 +20,7 @@
     "prepublishOnly": "npm run build:ts",
     "example:basic": "tsx examples/basic.ts",
     "example:streams": "tsx examples/streams.ts",
+    "example:proxy": "tsx examples/proxy.ts",
     "example:secure": "tsx examples/secure.ts",
     "example:handshake-timeout": "tsx examples/handshake-timeout.ts",
     "example:handshake-invalid": "tsx examples/handshake-invalid.ts",

@@ -32,7 +32,10 @@ async function main() {
 
   client.on('close', () => {
     console.log('\n✅ Connection rejected due to invalid handshake (expected)')
-    server.close()
+    server.close(() => {
+      console.log('\nTest complete')
+      process.exit(0)
+    })
   })
 
   client.on('error', (err) => {
@@ -41,12 +44,6 @@ async function main() {
       console.log('Connection error:', err.message)
     }
   })
-
-  // Cleanup after test
-  setTimeout(() => {
-    console.log('\nTest complete')
-    process.exit(0)
-  }, 1000)
 }
 
 main().catch(console.error)

@@ -4,12 +4,13 @@ export { ProcessProxyConnection } from './connection.js'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { platform } from 'os'
+import { readSocket } from './read-socket.js'
 
 const HANDSHAKE_PROTOCOL = 'ProcessProxy 0001 '
 const HANDSHAKE_PROTOCOL_LENGTH = 18
 const HANDSHAKE_NONCE_LENGTH = 128
 const HANDSHAKE_LENGTH = HANDSHAKE_PROTOCOL_LENGTH + HANDSHAKE_NONCE_LENGTH // 146 bytes
-const HANDSHAKE_TIMEOUT = 500
+const HANDSHAKE_TIMEOUT = 1000
 
 export interface ProxyProcessServerOptions extends ServerOpts {
   /**
@@ -35,92 +36,49 @@ export const createProxyProcessServer = (
   options?: ProxyProcessServerOptions,
 ) => {
   const { validateConnection, ...serverOpts } = options || {}
-  
+
   return createServer(serverOpts, (socket) => {
     ensureValidHandshake(socket, validateConnection)
       .then(() => listener(new ProcessProxyConnection(socket)))
-      .catch(() => socket.destroy())
+      .catch((e) => socket.end())
   })
 }
 
-const ensureValidHandshake = (
+const ensureValidHandshake = async (
   socket: Socket,
   validateConnection?: (nonce: string) => Promise<boolean>,
 ) => {
-  return new Promise<Socket>(async (resolve, reject) => {
-    let buffer = Buffer.allocUnsafe(0)
+  const buffer = await readSocket(
+    socket,
+    HANDSHAKE_LENGTH,
+    AbortSignal.timeout(HANDSHAKE_TIMEOUT),
+  )
+  // Parse protocol header (18 bytes)
+  const protocolHeader = buffer
+    .subarray(0, HANDSHAKE_PROTOCOL_LENGTH)
+    .toString('utf-8')
 
-    const timeout = setTimeout(
-      () => reject(new Error('timeout')),
-      HANDSHAKE_TIMEOUT,
+  if (protocolHeader !== HANDSHAKE_PROTOCOL) {
+    throw new Error('Invalid handshake protocol')
+  }
+
+  // Validate connection if callback provided
+  if (validateConnection) {
+    // Parse nonce (128 bytes) - read until first null byte
+    const nonceBuffer = buffer.subarray(
+      HANDSHAKE_PROTOCOL_LENGTH,
+      HANDSHAKE_LENGTH,
     )
-    const onError = (error: Error) => {
-      reject(error)
-      clearTimeout(timeout)
+    const nullIndex = nonceBuffer.indexOf(0)
+    const nonce =
+      nullIndex === -1
+        ? nonceBuffer.toString('utf8')
+        : nonceBuffer.subarray(0, nullIndex).toString('utf8')
+
+    if (!(await validateConnection(nonce))) {
+      throw new Error('Connection validation failed')
     }
-
-    const onClose = () => {
-      reject(new Error('closed'))
-      clearTimeout(timeout)
-    }
-
-    const onData = async (data: Buffer) => {
-      buffer = Buffer.concat([buffer, data])
-
-      if (buffer.length >= HANDSHAKE_LENGTH) {
-        // Parse protocol header (18 bytes)
-        const protocolHeader = buffer
-          .subarray(0, HANDSHAKE_PROTOCOL_LENGTH)
-          .toString('ascii')
-
-        if (protocolHeader !== HANDSHAKE_PROTOCOL) {
-          reject(new Error('Invalid handshake protocol'))
-          return
-        }
-
-        // Parse nonce (128 bytes) - read until first null byte
-        const nonceBuffer = buffer.subarray(
-          HANDSHAKE_PROTOCOL_LENGTH,
-          HANDSHAKE_LENGTH,
-        )
-        const nullIndex = nonceBuffer.indexOf(0)
-        const nonce =
-          nullIndex === -1
-            ? nonceBuffer.toString('utf8')
-            : nonceBuffer.subarray(0, nullIndex).toString('utf8')
-
-        // Validate connection if callback provided
-        if (validateConnection) {
-          try {
-            const isValid = await validateConnection(nonce)
-            if (!isValid) {
-              reject(new Error('Connection validation failed'))
-              return
-            }
-          } catch (error) {
-            reject(error)
-            return
-          }
-        }
-
-        clearTimeout(timeout)
-        socket.off('data', onData)
-        socket.off('close', onClose)
-        socket.off('error', onError)
-
-        // If there's data after the handshake, put it back
-        if (buffer.length > HANDSHAKE_LENGTH) {
-          socket.unshift(buffer.subarray(HANDSHAKE_LENGTH))
-        }
-
-        resolve(socket)
-      }
-    }
-
-    socket.on('data', onData)
-    socket.on('close', onClose)
-    socket.on('error', onError)
-  })
+  }
 }
 
 /**

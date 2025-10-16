@@ -3,6 +3,7 @@ import { Socket } from 'net'
 import { ReadStream } from './read-stream.js'
 import { WriteStream } from './write-stream.js'
 import { promisify } from 'util'
+import { readSocket } from './read-socket.js'
 
 // Command identifiers
 const CMD_GET_ARGS = 0x01
@@ -52,26 +53,8 @@ export class ProcessProxyConnection extends EventEmitter {
     this.emit('error', error)
   }
 
-  private async read(length: number): Promise<Buffer> {
-    while (this.socket.readableLength < length && !this.socket.destroyed) {
-      await new Promise((resolve) => this.socket.once('readable', resolve))
-    }
-
-    if (this.socket.destroyed) {
-      throw new Error("Can't read, socket is destroyed")
-    }
-
-    const buf = this.socket.read(length)
-
-    if (!buf || buf.length !== length) {
-      throw new Error('Failed to read expected number of bytes')
-    }
-
-    if (!Buffer.isBuffer(buf)) {
-      throw new Error('Expected a Buffer from socket read')
-    }
-
-    return buf
+  private read(length: number) {
+    return readSocket(this.socket, length)
   }
 
   private async readLengthPrefixedString() {
