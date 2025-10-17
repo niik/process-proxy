@@ -12,12 +12,13 @@
     }
   },
   "scripts": {
-    "install": "node-gyp rebuild",
+    "install": "node scripts/install.js",
     "build": "npm run build:native && npm run build:ts",
     "build:native": "node-gyp rebuild",
     "build:ts": "tsc",
     "clean": "rm -rf dist build",
     "prepublishOnly": "npm run build:ts",
+    "prebuild": "node scripts/prebuild.js",
     "example:basic": "tsx examples/basic.ts",
     "example:streams": "tsx examples/streams.ts",
     "example:proxy": "tsx examples/proxy.ts",
@@ -54,6 +55,7 @@
     "dist",
     "build/Release",
     "native",
-    "binding.gyp"
+    "binding.gyp",
+    "prebuilds"
   ]
 }

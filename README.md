@@ -19,6 +19,8 @@ A modern npm package (requiring Node 22+) written in TypeScript that enables dev
 npm install process-proxy
 ```
 
+**Note:** This package includes prebuilt native binaries for common platforms (Windows, macOS, Linux). If a prebuild is not available for your platform, the native module will be compiled automatically during installation (requires build tools).
+
 ## Building
 
 This package includes a native executable that must be built before use:
@@ -28,6 +30,16 @@ npm run build
 ```
 
 This will compile both the TypeScript library and the native C executable.
+
+### Building Prebuilds
+
+To create prebuilt binaries for distribution:
+
+```bash
+npm run prebuild
+```
+
+This will create prebuilt binaries in the `prebuilds` directory for your current platform and architecture.
 
 ## Usage
 

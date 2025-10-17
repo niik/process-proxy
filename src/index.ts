@@ -3,8 +3,9 @@ import { ProcessProxyConnection } from './connection.js'
 export { ProcessProxyConnection } from './connection.js'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
-import { platform } from 'os'
+import { platform, arch } from 'os'
 import { readSocket } from './read-socket.js'
+import { existsSync } from 'fs'
 
 const HANDSHAKE_PROTOCOL = 'ProcessProxy 0001 '
 const HANDSHAKE_PROTOCOL_LENGTH = 18
@@ -95,9 +96,22 @@ export function getProxyCommandPath(): string {
   const modulePath = fileURLToPath(moduleUrl)
   const moduleDir = dirname(modulePath)
 
-  // Navigate from dist/ to the project root, then to build/Release/
   const executableName =
     platform() === 'win32' ? 'process-proxy.exe' : 'process-proxy'
 
+  // First, check for prebuilt binary
+  const prebuiltPath = join(
+    moduleDir,
+    '..',
+    'prebuilds',
+    `${platform()}-${arch()}`,
+    executableName,
+  )
+
+  if (existsSync(prebuiltPath)) {
+    return prebuiltPath
+  }
+
+  // Fall back to build/Release/
   return join(moduleDir, '..', 'build', 'Release', executableName)
 }
