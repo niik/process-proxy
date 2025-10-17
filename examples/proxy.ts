@@ -25,12 +25,9 @@ const waitForWritableFinished = (stream: Writable) => {
 async function main() {
   const server = createProxyProcessServer(
     async (connection) => {
-      // Get process information
-      const [argv, env, cwd] = await Promise.all([
-        connection.getArgs(),
-        connection.getEnv(),
-        connection.getCwd(),
-      ])
+      const argv = await connection.getArgs()
+      const env = await connection.getEnv()
+      const cwd = await connection.getCwd()
 
       delete env.PROCESS_PROXY_PORT
       const cmd = argv.at(1)
@@ -91,8 +88,8 @@ async function main() {
         })
     },
     {
-      validateConnection: process.env.PROCESS_PROXY_SECRET
-        ? async (secret) => secret === process.env.PROCESS_PROXY_SECRET
+      validateConnection: process.env.PROCESS_PROXY_TOKEN
+        ? async (token) => token === process.env.PROCESS_PROXY_TOKEN
         : undefined,
     },
   )

@@ -12,9 +12,9 @@ The native executable will be written in C and compiled using node-gyp. It will 
 
 If the connection is successful, it will immediately send a handshake to identify itself as a valid ProcessProxy client. The handshake is exactly 146 bytes:
 - Protocol header: "ProcessProxy 0001 " (18 bytes ASCII, including trailing space)
-- Secret: 128 bytes loaded from the `PROCESS_PROXY_SECRET` environment variable
+- Token: 128 bytes loaded from the `PROCESS_PROXY_TOKEN` environment variable
 
-The secret is right-padded with null bytes if the environment variable contains fewer than 128 bytes. This ensures a fixed-length handshake for efficient parsing. If `PROCESS_PROXY_SECRET` is not set, the secret portion will be all null bytes.
+The token is right-padded with null bytes if the environment variable contains fewer than 128 bytes. This ensures a fixed-length handshake for efficient parsing. If `PROCESS_PROXY_TOKEN` is not set, the token portion will be all null bytes.
 
 After the handshake is sent, the executable will read commands from the TCP socket and execute them, sending the results back over the socket. If the connection fails, it will exit with an error code.
 
@@ -75,14 +75,14 @@ A factory function that creates a standard Node.js `net.Server` configured to ha
 
 The function validates each connection by expecting a handshake within 1000ms. The handshake must be exactly 146 bytes:
 - Protocol header: "ProcessProxy 0001 " (18 bytes)
-- Secret: 128 bytes
+- Token: 128 bytes
 
 Connections that don't send a valid handshake or don't send it within the timeout are immediately closed. This prevents random TCP connections from being processed.
 
-The function accepts an optional `validateConnection` callback in its options parameter. This callback receives the secret string (read from the handshake up until the first null byte) and should return a Promise<boolean>. If the promise resolves to false, the connection is immediately closed. This allows applications to implement custom authentication schemes such as:
-- Pre-shared secret validation
+The function accepts an optional `validateConnection` callback in its options parameter. This callback receives the token string (read from the handshake up until the first null byte) and should return a Promise<boolean>. If the promise resolves to false, the connection is immediately closed. This allows applications to implement custom authentication schemes such as:
+- Pre-shared token validation
 - Token-based authentication
-- Database lookup of valid secrets
+- Database lookup of valid tokens
 - Time-based one-time password (TOTP) validation
 
 ```typescript
@@ -91,9 +91,9 @@ const server = createProxyProcessServer(
     // Handle connection
   },
   {
-    validateConnection: async (secret) => {
+    validateConnection: async (token) => {
       // Custom validation logic
-      return secret === expectedValue
+      return token === expectedValue
     },
   },
 )

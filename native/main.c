@@ -668,24 +668,24 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Send handshake: "ProcessProxy 0001 " (18 bytes) + secret (128 bytes) = 146 bytes total
+    // Send handshake: "ProcessProxy 0001 " (18 bytes) + token (128 bytes) = 146 bytes total
     char handshake[146];
     memset(handshake, 0, sizeof(handshake));
     
     // Copy protocol header (18 bytes including trailing space)
     memcpy(handshake, "ProcessProxy 0001 ", 18);
     
-    // Get secret from environment variable
-    const char* secret_env = getenv("PROCESS_PROXY_SECRET");
-    if (secret_env != NULL) {
-        // Copy secret, up to 128 bytes (remaining bytes stay as null padding)
-        size_t secret_len = strlen(secret_env);
-        if (secret_len > 128) {
-            secret_len = 128;
+    // Get token from environment variable
+    const char* token_env = getenv("PROCESS_PROXY_TOKEN");
+    if (token_env != NULL) {
+        // Copy token, up to 128 bytes (remaining bytes stay as null padding)
+        size_t token_len = strlen(token_env);
+        if (token_len > 128) {
+            token_len = 128;
         }
-        memcpy(handshake + 18, secret_env, secret_len);
+        memcpy(handshake + 18, token_env, token_len);
     }
-    // If secret_env is NULL or empty, the secret portion remains null-padded
+    // If token_env is NULL or empty, the token portion remains null-padded
     
     if (send(g_socket, handshake, 146, 0) != 146) {
         fprintf(stderr, "Error: Failed to send handshake\n");
