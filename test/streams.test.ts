@@ -105,7 +105,7 @@ describe('Stream Operations', () => {
   })
 
   it('should handle multiple writes to stdout', async () => {
-    const messages = ['Line 1\n', 'Line 2\n', 'Line 3\n']
+    const messages = ['First', 'Second', 'Third']
 
     const { promise, handler } = createConnectionHandler(
       async (connection, resolve, reject) => {
