@@ -48,14 +48,18 @@ async function main() {
       }
 
       connection.on('close', () => {
-        console.log(`${id}: connection closed`)
         if (child.connected) {
+          console.log(`${id}: connection closed`)
           child.kill()
         }
         // TODO: Also ensure child process is killed?
       })
 
-      console.log(`${id}: executing in ${cwd}`)
+      const shortenedPath = process.env.HOME
+        ? cwd.replace(process.env.HOME, '~')
+        : cwd
+
+      console.log(`${shortenedPath} $ ${cmd} ${args.join(' ')}`)
 
       const child = spawn(cmd, args, { env, cwd })
         .on('spawn', () => {
@@ -72,7 +76,9 @@ async function main() {
               waitForWritableFinished(connection.stderr),
             ])
 
-            console.log(`${id}: exiting proxy with code ${code}`)
+            if (code !== 0) {
+              console.log(`${id}: exiting proxy with code ${code}`)
+            }
             await connection.exit(code ?? 0)
           })
         })
