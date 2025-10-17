@@ -19,10 +19,7 @@ describe('Basic Connection', () => {
 
           assert.ok(Array.isArray(args), 'args should be an array')
           assert.ok(args.length >= 2, 'should have at least 2 args')
-          assert.ok(
-            args[1] === 'arg1',
-            'first custom arg should be "arg1"',
-          )
+          assert.ok(args[1] === 'arg1', 'first custom arg should be "arg1"')
 
           assert.ok(typeof cwd === 'string', 'cwd should be a string')
           assert.ok(cwd.length > 0, 'cwd should not be empty')
@@ -129,7 +126,7 @@ describe('Basic Connection', () => {
 
     await promise
     const exitCode = await waitForExit(child)
-    
+
     assert.strictEqual(exitCode, 99, 'exit code should be 99')
 
     await testServer.close()

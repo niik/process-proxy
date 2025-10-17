@@ -11,6 +11,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 The native executable will be written in C and compiled using node-gyp. It will on launch attempt to connect to a TCP server running on localhost at a port specifed by the environment variable `PROCESS_PROXY_PORT`. If no such variable is set, it will exit with an error code and an error message written to its stderr.
 
 If the connection is successful, it will immediately send a handshake to identify itself as a valid ProcessProxy client. The handshake is exactly 146 bytes:
+
 - Protocol header: "ProcessProxy 0001 " (18 bytes ASCII, including trailing space)
 - Token: 128 bytes loaded from the `PROCESS_PROXY_TOKEN` environment variable
 
@@ -74,12 +75,14 @@ The TypeScript library provides a high-level API for interacting with the native
 A factory function that creates a standard Node.js `net.Server` configured to handle connections from the native executable. It accepts a callback that receives a `ProcessProxyConnection` instance for each incoming connection.
 
 The function validates each connection by expecting a handshake within 1000ms. The handshake must be exactly 146 bytes:
+
 - Protocol header: "ProcessProxy 0001 " (18 bytes)
 - Token: 128 bytes
 
 Connections that don't send a valid handshake or don't send it within the timeout are immediately closed. This prevents random TCP connections from being processed.
 
 The function accepts an optional `validateConnection` callback in its options parameter. This callback receives the token string (read from the handshake up until the first null byte) and should return a Promise<boolean>. If the promise resolves to false, the connection is immediately closed. This allows applications to implement custom authentication schemes such as:
+
 - Pre-shared token validation
 - Token-based authentication
 - Database lookup of valid tokens
