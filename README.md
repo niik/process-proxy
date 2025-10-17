@@ -151,7 +151,9 @@ server.close(() => console.log('Server closed'))
 **Parameters:**
 
 - `listener: (connection: ProcessProxyConnection) => void` - Callback invoked for each incoming connection
-- `options?: ServerOpts` - Optional Node.js server options (see `net.createServer`)
+- `options?: ProxyProcessServerOptions` - Optional configuration object:
+  - `validateConnection?: (secret: string) => Promise<boolean>` - Optional callback to validate the connection secret during handshake. Receives the secret from the handshake and should return a Promise resolving to `true` to accept the connection or `false` to reject it.
+  - All standard Node.js `net.ServerOpts` options are also supported
 
 **Returns:** `Server` - A standard Node.js `net.Server` instance
 
@@ -217,14 +219,19 @@ PROCESS_PROXY_PORT=12345 ./build/Release/process-proxy [args...]
 
 The TCP server only listens on localhost (127.0.0.1), but this does not provide complete security. Other processes and users with access to the network stack on the host machine can potentially connect to the TCP server.
 
-**You are responsible for implementing additional security measures** to ensure that only trusted processes can connect to the TCP server. Some suggestions:
+### Built-in Secret Authentication
 
-1. **Generate a secret token** and pass it to the native executable via an environment variable
-2. **Verify the token** on connection using `ProcessProxy.getEnv()` before allowing any further commands
-3. **Use process isolation** techniques appropriate for your operating system
-4. **Monitor connections** and close unauthorized clients immediately
+ProcessProxy includes a built-in authentication mechanism to validate connections during the handshake phase:
 
-Example security implementation:
+1. When the native executable connects, it sends a 146-byte handshake containing:
+   - Protocol header: "ProcessProxy 0001 " (18 bytes)
+   - Secret: 128 bytes read from the `PROCESS_PROXY_SECRET` environment variable
+
+2. The server validates this handshake and can optionally verify the secret using a `validateConnection` callback
+
+3. If authentication fails, the connection is immediately closed before any commands are processed
+
+**Using Secret Authentication:**
 
 ```typescript
 import crypto from 'crypto'
@@ -232,25 +239,22 @@ import { createProxyProcessServer, getProxyCommandPath } from 'process-proxy'
 import { spawn } from 'child_process'
 import { AddressInfo } from 'net'
 
-const secret = crypto.randomBytes(32).toString('hex')
+// Generate a random secret for this session
+const expectedSecret = crypto.randomBytes(32).toString('hex')
 
-const server = createProxyProcessServer(async (connection) => {
-  try {
-    const env = await connection.getEnv()
-
-    if (env.PROCESS_PROXY_SECRET !== secret) {
-      console.error('Unauthorized connection attempt!')
-      await connection.exit(1)
-      return
-    }
-
-    // Connection is authenticated, proceed normally
+// Create server with secret validation
+const server = createProxyProcessServer(
+  (connection) => {
+    // Connection is already authenticated at this point
     console.log('Authenticated connection established')
-  } catch (error) {
-    console.error('Error during authentication:', error)
-    await connection.exit(1)
-  }
-})
+  },
+  {
+    // Validate the secret during handshake
+    validateConnection: async (secret) => {
+      return secret === expectedSecret
+    },
+  },
+)
 
 // Start listening
 const port = await new Promise<number>((resolve) => {
@@ -259,15 +263,30 @@ const port = await new Promise<number>((resolve) => {
   })
 })
 
-// Launch with secret
-const child = spawn(getProxyCommandPath(), [], {
+// Launch native executable with the secret
+const child = spawn(getProxyCommandPath(), ['arg1', 'arg2'], {
   env: {
     ...process.env,
     PROCESS_PROXY_PORT: port.toString(),
-    PROCESS_PROXY_SECRET: secret,
+    PROCESS_PROXY_SECRET: expectedSecret, // Secret passed to native process
   },
 })
 ```
+
+**How it works:**
+
+- The native executable reads `PROCESS_PROXY_SECRET` from its environment and includes it in the handshake
+- The server calls your `validateConnection` callback with the received secret
+- If the callback returns `false` or rejects, the connection is immediately closed
+- Authentication happens before any commands are processed, preventing unauthorized access
+
+**Additional Security Recommendations:**
+
+1. **Always use `validateConnection`** in production environments
+2. **Generate unique secrets** per session using cryptographically secure random generators
+3. **Use environment variables** to pass secrets (never hardcode them)
+4. **Implement additional authorization** based on your application's security requirements
+5. **Monitor for suspicious connection patterns** and implement rate limiting if needed
 
 ## Platform Support
 
