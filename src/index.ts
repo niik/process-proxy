@@ -39,7 +39,7 @@ export const createProxyProcessServer = (
 
   return createServer(serverOpts, (socket) => {
     ensureValidHandshake(socket, validateConnection)
-      .then(() => listener(new ProcessProxyConnection(socket)))
+      .then((token) => listener(new ProcessProxyConnection(socket, token)))
       .catch((e) => socket.end())
   })
 }
@@ -47,7 +47,7 @@ export const createProxyProcessServer = (
 const ensureValidHandshake = async (
   socket: Socket,
   validateConnection?: (token: string) => Promise<boolean>,
-) => {
+): Promise<string> => {
   const buffer = await readSocket(
     socket,
     HANDSHAKE_LENGTH,
@@ -62,23 +62,25 @@ const ensureValidHandshake = async (
     throw new Error('Invalid handshake protocol')
   }
 
+  // Parse token (128 bytes) - read until first null byte
+  const tokenBuffer = buffer.subarray(
+    HANDSHAKE_PROTOCOL_LENGTH,
+    HANDSHAKE_LENGTH,
+  )
+  const nullIndex = tokenBuffer.indexOf(0)
+  const token =
+    nullIndex === -1
+      ? tokenBuffer.toString('utf8')
+      : tokenBuffer.subarray(0, nullIndex).toString('utf8')
+
   // Validate connection if callback provided
   if (validateConnection) {
-    // Parse token (128 bytes) - read until first null byte
-    const tokenBuffer = buffer.subarray(
-      HANDSHAKE_PROTOCOL_LENGTH,
-      HANDSHAKE_LENGTH,
-    )
-    const nullIndex = tokenBuffer.indexOf(0)
-    const token =
-      nullIndex === -1
-        ? tokenBuffer.toString('utf8')
-        : tokenBuffer.subarray(0, nullIndex).toString('utf8')
-
     if (!(await validateConnection(token))) {
       throw new Error('Connection validation failed')
     }
   }
+
+  return token
 }
 
 /**

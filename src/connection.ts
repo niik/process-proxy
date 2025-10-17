@@ -21,6 +21,7 @@ export class ProcessProxyConnection extends EventEmitter {
   public readonly stdin: ReadStream
   public readonly stdout: WriteStream
   public readonly stderr: WriteStream
+  public readonly token: string
 
   private queue: Promise<unknown> = Promise.resolve()
   private write: (data: Buffer | string) => Promise<void>
@@ -29,8 +30,12 @@ export class ProcessProxyConnection extends EventEmitter {
     return this.socket.closed
   }
 
-  constructor(private readonly socket: Socket) {
+  constructor(
+    private readonly socket: Socket,
+    token: string,
+  ) {
     super()
+    this.token = token
     this.stdin = new ReadStream(this)
     this.stdout = new WriteStream(this, 'stdout')
     this.stderr = new WriteStream(this, 'stderr')
