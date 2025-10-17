@@ -2,6 +2,7 @@ import { Readable } from 'stream'
 import { type ProcessProxyConnection } from './connection.js'
 
 export class ReadStream extends Readable {
+  private streaming: boolean = false
   private polling: boolean = false
   public pollingInterval = 100
   private pollingTimer?: NodeJS.Timeout
@@ -11,60 +12,70 @@ export class ReadStream extends Readable {
   }
 
   _read(size: number): void {
-    if (!this.polling) {
-      this.polling = true
-      this.startPolling()
+    if (!this.streaming) {
+      this.streaming = true
+      this.stream()
     }
   }
 
-  private startPolling(): void {
-    if (!this.polling) {
-      return
-    }
+  private async drainStdin() {
+    let read = 0
+    let data: Buffer | null = null
+    do {
+      // Read up to 8KB at a time
+      data = await this.connection.readStdin(8192)
 
-    this.pollingTimer = setTimeout(async () => {
-      try {
+      // Handle closed stream
+      if (data === null) {
+        this.push(null)
+        break
+      }
+
+      read += data.length
+
+      // Push data to the stream, if push returns false, the stream is
+      // closed, so stop polling
+      if (data.length > 0 && !this.push(data)) {
+        break
+      }
+    } while (data?.length > 0 && this.streaming)
+
+    return read
+  }
+
+  private async stream() {
+    while (this.streaming) {
+      let data
+      do {
         // Read up to 8KB at a time
-        const data = await this.connection.readStdin(8192)
+        data = await this.connection.readStdin(8192)
 
         // Handle closed stream
         if (data === null) {
           this.push(null)
-          this.polling = false
+          this.streaming = false
           return
         }
 
         // Push data to the stream, if push returns false, the stream is
         // closed, so stop polling
         if (data.length > 0 && !this.push(data)) {
-          return
+          break
         }
+      } while (data?.length > 0 && this.streaming)
 
-        if (this.polling) {
-          this.startPolling()
-        }
-      } catch (error) {
-        this.destroy(error as Error)
-        this.polling = false
-      }
-    }, this.pollingInterval)
-  }
-
-  private stopPolling() {
-    this.polling = false
-    if (this.pollingTimer) {
-      clearTimeout(this.pollingTimer)
-      this.pollingTimer = undefined
+      if (!this.streaming) break
+      await new Promise((resolve) => setTimeout(resolve, this.pollingInterval))
     }
   }
 
   _destroy(error: Error | null, callback: (error: Error | null) => void): void {
-    this.stopPolling()
+    this.streaming = false
     callback(error)
   }
 
   async close(): Promise<void> {
-    this.stopPolling()
+    this.streaming = false
     await this.connection.closeStdin()
     this.push(null)
   }
