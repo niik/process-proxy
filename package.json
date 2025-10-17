@@ -25,7 +25,7 @@
     "example:handshake-timeout": "tsx examples/handshake-timeout.ts",
     "example:handshake-invalid": "tsx examples/handshake-invalid.ts",
     "example:nonce-validation": "tsx examples/token-validation.ts",
-    "test": "tsx --test --test-timeout 10000 test/*.test.ts",
+    "test": "tsx --test --test-reporter=spec --test-timeout 10000 test/*.test.ts",
     "lint": "prettier --check .",
     "format": "prettier --write ."
   },
