@@ -189,12 +189,20 @@ describe('Stream Operations', () => {
         try {
           const first = await connection.readStdin(1024)
           assert.ok(Buffer.isBuffer(first))
-          assert.strictEqual(first.length, 0, 'should read 0 bytes when no data')
+          assert.strictEqual(
+            first.length,
+            0,
+            'should read 0 bytes when no data',
+          )
 
           await connection.closeStdin()
 
           const second = await connection.readStdin(1024)
-          assert.strictEqual(second, null, 'should return null after stdin closed')
+          assert.strictEqual(
+            second,
+            null,
+            'should return null after stdin closed',
+          )
 
           await connection.exit(0)
           resolve(undefined)
