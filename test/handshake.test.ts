@@ -84,4 +84,37 @@ describe('Handshake', () => {
     client.destroy()
     await testServer.close()
   })
+
+  it('should reject connection with invalid protocol header', async () => {
+    let connectionReceived = false
+
+    const testServer = await createTestServer(() => {
+      connectionReceived = true
+    })
+
+    const client = new net.Socket()
+
+    await new Promise<void>((resolve, reject) => {
+      client.connect(testServer.port, '127.0.0.1', resolve)
+      client.on('error', reject)
+    })
+
+    // Send a full-length handshake with an invalid 18-byte header
+    const invalidHandshake = Buffer.alloc(146) // zeros => header will not match
+    client.write(invalidHandshake)
+
+    // Give the server a short time to process and close the socket
+    await new Promise((r) => setTimeout(r, 100))
+
+    // Server should have closed the socket and not invoked the connection handler
+    assert.ok(client.destroyed || !client.readable, 'socket should be closed')
+    assert.strictEqual(
+      connectionReceived,
+      false,
+      'connection handler should not be called on invalid header',
+    )
+
+    client.destroy()
+    await testServer.close()
+  })
 })
