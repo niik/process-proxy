@@ -182,4 +182,34 @@ describe('Stream Operations', () => {
 
     await testServer.close()
   })
+
+  it('should return 0 bytes when no stdin data, then null after close', async () => {
+    const { promise, handler } = createConnectionHandler(
+      async (connection, resolve, reject) => {
+        try {
+          const first = await connection.readStdin(1024)
+          assert.ok(Buffer.isBuffer(first))
+          assert.strictEqual(first.length, 0, 'should read 0 bytes when no data')
+
+          await connection.closeStdin()
+
+          const second = await connection.readStdin(1024)
+          assert.strictEqual(second, null, 'should return null after stdin closed')
+
+          await connection.exit(0)
+          resolve(undefined)
+        } catch (error) {
+          reject(error as Error)
+        }
+      },
+    )
+
+    const testServer = await createTestServer(handler)
+    const child = spawnNativeProcess(testServer.port)
+
+    await promise
+    await waitForExit(child)
+
+    await testServer.close()
+  })
 })
