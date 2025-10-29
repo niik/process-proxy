@@ -131,4 +131,48 @@ describe('Basic Connection', () => {
 
     await testServer.close()
   })
+
+  it('should serialize concurrent commands correctly', async () => {
+    const { promise, handler } = createConnectionHandler(
+      async (connection, resolve, reject) => {
+        try {
+          const tasks: Array<Promise<unknown>> = []
+
+          // Mix of getCwd, getArgs, getEnv
+          for (let i = 0; i < 10; i++) {
+            tasks.push(connection.getCwd())
+            tasks.push(connection.getArgs())
+            tasks.push(connection.getEnv())
+          }
+
+          const results = await Promise.all(tasks)
+
+          // Validate results
+          for (let i = 0; i < results.length; i += 3) {
+            const cwd = results[i] as string
+            const args = results[i + 1] as string[]
+            const env = results[i + 2] as Record<string, string>
+
+            assert.ok(typeof cwd === 'string' && cwd.length > 0, 'cwd is valid')
+            assert.ok(Array.isArray(args) && args.length >= 1, 'args is valid')
+            assert.ok(env && typeof env === 'object', 'env is valid')
+          }
+
+          await connection.exit(0)
+          resolve(undefined)
+        } catch (error) {
+          reject(error as Error)
+        }
+      },
+    )
+
+    const testServer = await createTestServer(handler)
+    const child = spawnNativeProcess(testServer.port, ['argX'])
+
+    await promise
+    const exitCode = await waitForExit(child)
+    assert.strictEqual(exitCode, 0)
+
+    await testServer.close()
+  })
 })
