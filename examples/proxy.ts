@@ -8,7 +8,11 @@
 //   ./Build/Release/
 
 import { AddressInfo } from 'net'
-import { createProxyProcessServer, getProxyCommandPath } from '../src/index.js'
+import {
+  createProxyProcessServer,
+  getProxyCommandPath,
+  ProcessProxyConnection,
+} from '../src/index.js'
 import { spawn } from 'child_process'
 import { Writable } from 'stream'
 
@@ -19,6 +23,18 @@ const waitForWritableFinished = (stream: Writable) => {
     } else {
       stream.once('finish', () => resolve())
     }
+  })
+}
+
+const exitWithError = (
+  connection: ProcessProxyConnection,
+  message: string,
+  exitCode = 1,
+) => {
+  return new Promise<void>((resolve, reject) => {
+    connection.stderr.end(`${message}\n`, () => {
+      connection.exit(exitCode).then(resolve, reject)
+    })
   })
 }
 
@@ -37,13 +53,10 @@ async function main() {
 
       if (!cmd) {
         console.error(`${id}: ERROR: No command provided to proxy`)
-        await connection.writeStderr(
-          Buffer.from(
-            `Error: No command provided to proxy\nUsage: ${argv[0]} <command> [args...]\n`,
-            'utf-8',
-          ),
+        await exitWithError(
+          connection,
+          `Error: No command provided to proxy\nUsage: ${argv[0]} <command> [args...]`,
         )
-        await connection.exit(1)
         return
       }
 
@@ -84,13 +97,10 @@ async function main() {
         })
         .on('error', async (err) => {
           console.error(`${id}: Failed to start child:`, err)
-          await connection.writeStderr(
-            Buffer.from(
-              `Error: Failed to start command: ${err.message}\n`,
-              'utf-8',
-            ),
+          await exitWithError(
+            connection,
+            `Error: Failed to start command: ${err.message}`,
           )
-          await connection.exit(1)
         })
     },
     {
