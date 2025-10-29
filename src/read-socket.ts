@@ -1,5 +1,21 @@
 import { Socket } from 'net'
 
+/**
+ * Reads a specified number of bytes from a given Socket.
+ *
+ * Waits until the requested number of bytes ('length') have been received from
+ * the socket, then resolves with a Buffer containing the received data. If the
+ * socket closes before all data is received, the promise is rejected with an
+ * error. Optionally, accepts an AbortSignal to cancel the operation.
+ *
+ * @param {Socket} socket - The socket from which to read data.
+ * @param {number} length - The exact number of bytes to read from the socket.
+ * @param {AbortSignal} [signal] - Optional AbortSignal to cancel the operation.
+ * @returns {Promise<Buffer>} Promise that resolves with a Buffer containing
+ * 'length' bytes.
+ * @throws {Error} If the socket closes before all data is read or if the
+ * operation is aborted.
+ */
 export async function readSocket(
   socket: Socket,
   length: number,
