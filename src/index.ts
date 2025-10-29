@@ -10,7 +10,7 @@ const HANDSHAKE_PROTOCOL = 'ProcessProxy 0001 '
 const HANDSHAKE_PROTOCOL_LENGTH = 18
 const HANDSHAKE_TOKEN_LENGTH = 128
 const HANDSHAKE_LENGTH = HANDSHAKE_PROTOCOL_LENGTH + HANDSHAKE_TOKEN_LENGTH // 146 bytes
-const HANDSHAKE_TIMEOUT = 1000
+const DEFAULT_HANDSHAKE_TIMEOUT = 1000
 
 export interface ProxyProcessServerOptions extends ServerOpts {
   /**
@@ -19,6 +19,10 @@ export interface ProxyProcessServerOptions extends ServerOpts {
    * If false, the connection will be rejected.
    */
   validateConnection?: (token: string) => Promise<boolean>
+  /**
+   * Optional handshake timeout in milliseconds. Defaults to 1000ms.
+   */
+  handshakeTimeout?: number
 }
 
 /**
@@ -35,10 +39,14 @@ export const createProxyProcessServer = (
   listener: (conn: ProcessProxyConnection) => void,
   options?: ProxyProcessServerOptions,
 ) => {
-  const { validateConnection, ...serverOpts } = options || {}
+  const { validateConnection, handshakeTimeout, ...serverOpts } = options || {}
 
   return createServer(serverOpts, (socket) => {
-    ensureValidHandshake(socket, validateConnection)
+    ensureValidHandshake(
+      socket,
+      validateConnection,
+      handshakeTimeout ?? DEFAULT_HANDSHAKE_TIMEOUT,
+    )
       .then((token) => listener(new ProcessProxyConnection(socket, token)))
       .catch((e) => socket.end())
   })
@@ -46,12 +54,13 @@ export const createProxyProcessServer = (
 
 const ensureValidHandshake = async (
   socket: Socket,
-  validateConnection?: (token: string) => Promise<boolean>,
+  validateConnection: ((token: string) => Promise<boolean>) | undefined,
+  timeoutMs: number,
 ): Promise<string> => {
   const buffer = await readSocket(
     socket,
     HANDSHAKE_LENGTH,
-    AbortSignal.timeout(HANDSHAKE_TIMEOUT),
+    AbortSignal.timeout(timeoutMs),
   )
   // Parse protocol header (18 bytes)
   const protocolHeader = buffer

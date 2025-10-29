@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert'
+import net from 'node:net'
 import {
   createTestServer,
   spawnNativeProcess,
@@ -49,6 +50,38 @@ describe('Handshake', () => {
     await promise
     await waitForExit(child)
 
+    await testServer.close()
+  })
+
+  it('should reject connection if handshake not sent within timeout', async () => {
+    let connectionReceived = false
+
+    const testServer = await createTestServer(
+      () => {
+        connectionReceived = true
+      },
+      { handshakeTimeout: 50 },
+    )
+
+    const client = new net.Socket()
+
+    await new Promise<void>((resolve, reject) => {
+      client.connect(testServer.port, '127.0.0.1', resolve)
+      client.on('error', reject)
+    })
+
+    // Wait longer than the custom 50ms handshake timeout
+    await new Promise((r) => setTimeout(r, 120))
+
+    // Server should have closed the socket
+    assert.ok(client.destroyed || !client.readable, 'socket should be closed')
+    assert.strictEqual(
+      connectionReceived,
+      false,
+      'connection handler should not be called on timeout',
+    )
+
+    client.destroy()
     await testServer.close()
   })
 })
