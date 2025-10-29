@@ -56,8 +56,5 @@ export async function readSocket(
     socket.on('close', onClose)
     socket.on('error', onError)
     signal?.addEventListener('abort', onAbort)
-
-    // Try to read immediately in case data is already available
-    tryRead()
   })
 }
