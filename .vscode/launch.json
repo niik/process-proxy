@@ -8,13 +8,7 @@
       "type": "node",
       "request": "launch",
       "name": "Debug current test file",
-      "args": [
-        "--import",
-        "tsx",
-        "--test-only",
-        "--test",
-        "${relativeFile}"
-      ],
+      "args": ["--import", "tsx", "--test-only", "--test", "${relativeFile}"],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen"
     }
