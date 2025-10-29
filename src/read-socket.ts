@@ -52,9 +52,9 @@ export async function readSocket(
       signal?.removeEventListener('abort', onAbort)
     }
 
-    socket.on('readable', tryRead)
     socket.on('close', onClose)
     socket.on('error', onError)
+    socket.on('readable', tryRead)
     signal?.addEventListener('abort', onAbort)
   })
 }
