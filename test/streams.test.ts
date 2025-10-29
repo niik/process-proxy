@@ -20,12 +20,9 @@ describe('Stream Operations', () => {
           })
 
           connection.stdin.on('end', () => {
+            connection.exit(0)
             resolve(undefined)
           })
-
-          await delay(100)
-          await connection.stdin.close()
-          await connection.exit(0)
         } catch (error) {
           reject(error as Error)
         }
@@ -34,43 +31,57 @@ describe('Stream Operations', () => {
 
     const testServer = await createTestServer(handler)
     const child = spawnNativeProcess(testServer.port)
+    child.stdin.end('test\n')
 
     await promise
     await waitForExit(child)
 
     // Stdin should have been closed (no data expected in this test)
-    assert.ok(true, 'stdin close should complete')
+    assert.strictEqual(
+      receivedData,
+      'test\n',
+      'stdin should have received data',
+    )
 
     await testServer.close()
   })
 
   it('should close stdout stream', async () => {
-    let stdoutClosed = false
-
-    const { promise, handler } = createConnectionHandler(
-      async (connection, resolve, reject) => {
-        try {
-          connection.stdout.write('Before close\n')
-          await connection.stdout.close()
-          stdoutClosed = true
-
-          await delay(100)
-          await connection.exit(0)
-          resolve(undefined)
-        } catch (error) {
-          reject(error as Error)
-        }
+    const { promise, handler } = createConnectionHandler<void>(
+      (connection, resolve, reject) => {
+        connection.stdout.on('close', () => {
+          connection.exit(0).then(resolve, reject)
+        })
+        connection.stdout.on('error', reject)
+        connection.stdout.end('Byebye\n')
       },
     )
 
     const testServer = await createTestServer(handler)
     const child = spawnNativeProcess(testServer.port)
 
+    const stdoutPromise = new Promise<string>((resolve) => {
+      let stdout = ''
+      child.stdout
+        .on('data', (data) => {
+          stdout += data.toString()
+        })
+        .on('end', () => {
+          resolve(stdout)
+        })
+    })
+
     await promise
+    const stdout = await stdoutPromise
+    assert.strictEqual(stdout, 'Byebye\n', 'stdout should contain Byebye')
+
+    assert.strictEqual(
+      child.stdout.readableEnded,
+      true,
+      'stdout should be ended',
+    )
+
     await waitForExit(child)
-
-    assert.ok(stdoutClosed, 'stdout should be closed')
-
     await testServer.close()
   })
 
@@ -81,7 +92,7 @@ describe('Stream Operations', () => {
       async (connection, resolve, reject) => {
         try {
           connection.stderr.write('Error before close\n')
-          await connection.stderr.close()
+          await new Promise((resolve) => connection.stderr.end(resolve))
           stderrClosed = true
 
           await delay(100)
@@ -186,8 +197,10 @@ describe('Stream Operations', () => {
   it('should return 0 bytes when no stdin data, then null after close', async () => {
     const { promise, handler } = createConnectionHandler(
       async (connection, resolve, reject) => {
+        const readStdin = (connection as any).readStdin.bind(connection)
+
         try {
-          const first = await connection.readStdin(1024)
+          const first = await readStdin(1024)
           assert.ok(Buffer.isBuffer(first))
           assert.strictEqual(
             first.length,
@@ -195,9 +208,10 @@ describe('Stream Operations', () => {
             'should read 0 bytes when no data',
           )
 
-          await connection.closeStdin()
+          connection.stdin.destroy()
+          await delay(100)
 
-          const second = await connection.readStdin(1024)
+          const second = await readStdin(1024)
           assert.strictEqual(
             second,
             null,

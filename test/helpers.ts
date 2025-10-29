@@ -1,5 +1,9 @@
 import { AddressInfo, Server } from 'net'
-import { spawn, ChildProcess } from 'child_process'
+import {
+  spawn,
+  ChildProcess,
+  ChildProcessWithoutNullStreams,
+} from 'child_process'
 import { createProxyProcessServer, getProxyCommandPath } from '../src/index.js'
 import type { ProcessProxyConnection } from '../src/connection.js'
 
@@ -41,7 +45,7 @@ export function spawnNativeProcess(
   port: number,
   args: string[] = ['test'],
   env: Record<string, string> = {},
-): ChildProcess {
+): ChildProcessWithoutNullStreams {
   return spawn(getProxyCommandPath(), args, {
     env: {
       ...process.env,
@@ -55,9 +59,19 @@ export function spawnNativeProcess(
 /**
  * Waits for a child process to exit
  */
-export async function waitForExit(child: ChildProcess): Promise<number | null> {
+export async function waitForExit(
+  child: ChildProcess,
+): Promise<NodeJS.Signals | number | null> {
+  if (child.exitCode !== null) {
+    return child.exitCode
+  }
+
+  if (child.signalCode !== null) {
+    return child.signalCode
+  }
+
   return new Promise((resolve) => {
-    child.on('exit', (code) => resolve(code))
+    child.on('exit', (code) => resolve(code ?? null))
   })
 }
 

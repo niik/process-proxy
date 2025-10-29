@@ -34,9 +34,11 @@ async function main() {
         // Give time for output then exit
         setTimeout(async () => {
           console.log('Closing streams and exiting...')
-          await connection.stdin.close()
-          await connection.stdout.close()
-          await connection.stderr.close()
+          Promise.all(
+            [connection.stdout, connection.stderr].map(
+              (stream) => new Promise((resolve) => stream.end(resolve)),
+            ),
+          )
           await connection.exit(0)
 
           setTimeout(() => {

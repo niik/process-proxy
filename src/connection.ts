@@ -4,6 +4,7 @@ import { ReadStream } from './read-stream.js'
 import { WriteStream } from './write-stream.js'
 import { promisify } from 'util'
 import { readSocket } from './read-socket.js'
+import Stream from 'stream'
 
 // Command identifiers
 const CMD_GET_ARGS = 0x01
@@ -25,6 +26,8 @@ export class ProcessProxyConnection extends EventEmitter {
   private queue: Promise<unknown> = Promise.resolve()
   private write: (data: Buffer | string) => Promise<void>
 
+  private hasSentExit: boolean = false
+
   public get closed(): boolean {
     return this.socket.closed
   }
@@ -34,14 +37,35 @@ export class ProcessProxyConnection extends EventEmitter {
     public readonly token: string,
   ) {
     super()
-    this.stdin = new ReadStream(this)
-    this.stdout = new WriteStream(this, 'stdout')
-    this.stderr = new WriteStream(this, 'stderr')
+    this.stdin = new ReadStream(this.readStdin.bind(this))
+    this.stdout = new WriteStream(this.writeStdout.bind(this))
+    this.stderr = new WriteStream(this.writeStderr.bind(this))
 
-    this.socket.on('close', () => this.handleClose())
-    this.socket.on('error', (error: Error) => this.handleError(error))
+    this.stdin.on('close', this.closeStdin.bind(this))
+    this.stdout.on('close', this.closeStdout.bind(this))
+    this.stderr.on('close', this.closeStderr.bind(this))
+
+    this.socket.on('close', this.handleClose.bind(this))
+    this.socket.on('error', this.handleError.bind(this))
 
     this.write = promisify(this.socket.write).bind(this.socket)
+  }
+
+  private closeStream(
+    command:
+      | typeof CMD_CLOSE_STDIN
+      | typeof CMD_CLOSE_STDOUT
+      | typeof CMD_CLOSE_STDERR,
+  ) {
+    const noop = () => Promise.resolve()
+    return this.sendCommand(
+      command,
+      undefined,
+      noop,
+      // We don't care if the connection is closed because that
+      // means the stream is already closed.
+      { onConnectionClosed: noop },
+    )
   }
 
   private handleClose(): void {
@@ -72,7 +96,7 @@ export class ProcessProxyConnection extends EventEmitter {
     return buf.readUInt32LE(0)
   }
 
-  public async readStdin(maxBytes: number): Promise<Buffer | null> {
+  private async readStdin(maxBytes: number): Promise<Buffer | null> {
     const payload = Buffer.allocUnsafe(4)
     payload.writeUInt32LE(maxBytes, 0)
 
@@ -98,11 +122,11 @@ export class ProcessProxyConnection extends EventEmitter {
     return response
   }
 
-  public closeStdin() {
-    return this.sendSimpleCommand(CMD_CLOSE_STDIN)
+  private closeStdin() {
+    return this.closeStream(CMD_CLOSE_STDIN)
   }
 
-  public writeStdout(data: Buffer) {
+  private writeStdout(data: Buffer) {
     const payload = Buffer.allocUnsafe(4 + data.length)
     payload.writeUInt32LE(data.length, 0)
     data.copy(payload, 4)
@@ -111,10 +135,10 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   public closeStdout() {
-    return this.sendSimpleCommand(CMD_CLOSE_STDOUT)
+    return this.closeStream(CMD_CLOSE_STDOUT)
   }
 
-  public writeStderr(data: Buffer) {
+  private writeStderr(data: Buffer) {
     const payload = Buffer.allocUnsafe(4 + data.length)
     payload.writeUInt32LE(data.length, 0)
     data.copy(payload, 4)
@@ -123,19 +147,24 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   public closeStderr() {
-    return this.sendSimpleCommand(CMD_CLOSE_STDERR)
-  }
-
-  private sendSimpleCommand(command: number): Promise<void> {
-    return this.sendCommand(command, undefined, () => Promise.resolve())
+    return this.closeStream(CMD_CLOSE_STDERR)
   }
 
   private sendCommand<T>(
     command: number,
     payload: Buffer | undefined,
     readCb: () => Promise<T>,
+    opts?: {
+      onConnectionClosed?: () => Promise<T>
+    },
   ): Promise<T> {
     const p = this.queue.then(async () => {
+      if (this.closed || this.hasSentExit) {
+        if (opts?.onConnectionClosed) {
+          return opts.onConnectionClosed()
+        }
+      }
+
       // Build command packet
       const packet = Buffer.alloc(1 + (payload?.length ?? 0))
       packet.writeUInt8(command, 0)
@@ -151,6 +180,8 @@ export class ProcessProxyConnection extends EventEmitter {
         const errorMsg = await this.readLengthPrefixedString()
         throw new Error(errorMsg || `Unknown error ${statusCode} from proxy`)
       }
+
+      this.hasSentExit ||= command === CMD_EXIT
 
       return readCb()
     })

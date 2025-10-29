@@ -112,10 +112,7 @@ server.on('connection', async (connection) => {
 
 ```typescript
 server.on('connection', async (connection) => {
-  // Close individual streams
-  await connection.stdin.close()
-  await connection.stdout.close()
-  await connection.stderr.close()
+  connection.stdin.end()
 })
 ```
 
