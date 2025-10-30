@@ -238,6 +238,9 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   public async exit(code: number): Promise<void> {
+    this.stdout.end()
+    this.stderr.end()
+
     const payload = Buffer.allocUnsafe(4)
     payload.writeUInt32LE(code, 0)
     return this.sendCommand(CMD_EXIT, payload, () => Promise.resolve())
