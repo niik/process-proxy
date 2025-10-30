@@ -112,7 +112,12 @@ export function createConnectionHandler<T>(
   const { promise, resolve, reject } = Promise.withResolvers<T>()
 
   const connectionHandler = (connection: ProcessProxyConnection) => {
-    Promise.resolve(handler(connection, resolve, reject)).catch(reject)
+    Promise.resolve(handler(connection, resolve, reject)).catch(async (err) => {
+      // Exit the connection with an error code to ensure the proxy process
+      // exits
+      await connection.exit(1).catch(() => {})
+      reject(err)
+    })
   }
 
   return { promise, handler: connectionHandler }
