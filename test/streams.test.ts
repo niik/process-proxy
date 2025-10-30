@@ -292,4 +292,39 @@ describe('Stream Operations', () => {
 
     await testServer.close()
   })
+
+  it.only('should receive an error when closing stdin twice (protocol error path)', async () => {
+    let closeStdin: () => Promise<void>
+    const { promise, handler } = createConnectionHandler<void>(
+      async (connection, resolve, reject) => {
+        try {
+          closeStdin = (connection as any).closeStdin.bind(connection)
+          await closeStdin() // first should succeed
+          let error: unknown
+          try {
+            await closeStdin() // second should throw
+          } catch (e) {
+            error = e
+          }
+          assert.ok(
+            error instanceof Error,
+            'Should throw error on second close',
+          )
+          assert.ok(
+            (error as Error).message.length > 0,
+            'Error message should not be empty',
+          )
+          await connection.exit(0)
+          resolve()
+        } catch (error) {
+          reject(error as Error)
+        }
+      },
+    )
+    const testServer = await createTestServer(handler)
+    const child = spawnNativeProcess(testServer.port)
+    await promise
+    await waitForExit(child)
+    await testServer.close()
+  })
 })
