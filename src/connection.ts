@@ -97,10 +97,11 @@ export class ProcessProxyConnection extends EventEmitter {
     return fn(buf)
   }
 
-  private async readLengthPrefixedString() {
-    const strLen = await this.readUInt32LE()
-    return await this.read(strLen, (buf) => buf.toString('utf8'))
-  }
+  private readString = (length: number) =>
+    this.read(length, (buf) => buf.toString('utf8'))
+
+  private readLengthPrefixedString = () =>
+    this.readUInt32LE().then(this.readString)
 
   private readUInt32LE = () => this.read(4, (buf) => buf.readUInt32LE(0))
   private readInt32LE = () => this.read(4, (buf) => buf.readInt32LE(0))
