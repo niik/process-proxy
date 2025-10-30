@@ -166,7 +166,7 @@ export class ProcessProxyConnection extends EventEmitter {
       onConnectionClosed?: () => Promise<T>
     },
   ): Promise<T> {
-    const p = this.queue.then(async () => {
+    const send = async () => {
       if (this.closed || this.hasSentExit) {
         if (opts?.onConnectionClosed) {
           return opts.onConnectionClosed()
@@ -192,10 +192,9 @@ export class ProcessProxyConnection extends EventEmitter {
       this.hasSentExit ||= command === CMD_EXIT
 
       return readCb()
-    })
+    }
 
-    this.queue = p
-    return p
+    return (this.queue = this.queue.then(send, send))
   }
 
   public async getArgs(): Promise<string[]> {
