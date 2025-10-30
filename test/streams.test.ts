@@ -53,7 +53,7 @@ describe('Stream Operations', () => {
           connection.exit(0).then(resolve, reject)
         })
         connection.stdout.on('error', reject)
-        connection.stdout.end('Byebye\n')
+        connection.stdout.end('Byebye')
       },
     )
 
@@ -73,7 +73,7 @@ describe('Stream Operations', () => {
 
     await promise
     const stdout = await stdoutPromise
-    assert.strictEqual(stdout, 'Byebye\n', 'stdout should contain Byebye')
+    assert.strictEqual(stdout, 'Byebye', 'stdout should contain Byebye')
 
     assert.strictEqual(
       child.stdout.readableEnded,
