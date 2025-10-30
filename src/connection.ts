@@ -5,29 +5,40 @@ import { WriteStream } from './write-stream.js'
 import { promisify } from 'util'
 import { readSocket } from './read-socket.js'
 
-// Command identifiers
-const CMD_GET_ARGS = 0x01
-const CMD_READ_STDIN = 0x02
-const CMD_WRITE_STDOUT = 0x03
-const CMD_WRITE_STDERR = 0x04
-const CMD_GET_CWD = 0x05
-const CMD_GET_ENV = 0x06
-const CMD_EXIT = 0x07
-const CMD_CLOSE_STDIN = 0x09
-const CMD_CLOSE_STDOUT = 0x0a
-const CMD_CLOSE_STDERR = 0x0b
+const GET_ARGS = 0x01
+const READ_STDIN = 0x02
+const WRITE_STDOUT = 0x03
+const WRITE_STDERR = 0x04
+const GET_CWD = 0x05
+const GET_ENV = 0x06
+const EXIT = 0x07
+const CLOSE_STDIN = 0x09
+const CLOSE_STDOUT = 0x0a
+const CLOSE_STDERR = 0x0b
 
 type Command =
-  | typeof CMD_GET_ARGS
-  | typeof CMD_READ_STDIN
-  | typeof CMD_WRITE_STDOUT
-  | typeof CMD_WRITE_STDERR
-  | typeof CMD_GET_CWD
-  | typeof CMD_GET_ENV
-  | typeof CMD_EXIT
-  | typeof CMD_CLOSE_STDIN
-  | typeof CMD_CLOSE_STDOUT
-  | typeof CMD_CLOSE_STDERR
+  | typeof GET_ARGS
+  | typeof READ_STDIN
+  | typeof WRITE_STDOUT
+  | typeof WRITE_STDERR
+  | typeof GET_CWD
+  | typeof GET_ENV
+  | typeof EXIT
+  | typeof CLOSE_STDIN
+  | typeof CLOSE_STDOUT
+  | typeof CLOSE_STDERR
+
+type CommandOptions<T = void> = {
+  onBeforeSend?: () => Promise<void>
+  onConnectionClosed?: () => Promise<T>
+}
+
+type CloseStreamCommand =
+  | typeof CLOSE_STDIN
+  | typeof CLOSE_STDOUT
+  | typeof CLOSE_STDERR
+
+type WriteStreamCommand = typeof WRITE_STDOUT | typeof WRITE_STDERR
 
 const destroyIfNecessary = (...streams: (WriteStream | ReadStream)[]) => {
   streams.filter((x) => !x.destroyed).forEach((x) => x.destroy())
@@ -50,6 +61,7 @@ export class ProcessProxyConnection extends EventEmitter {
   private queue: Promise<unknown> = Promise.resolve()
 
   private hasSentExit: boolean = false
+  private write: (buf: Buffer) => Promise<void>
 
   public get closed(): boolean {
     return this.socket.closed
@@ -62,36 +74,25 @@ export class ProcessProxyConnection extends EventEmitter {
     super()
     this.stdin = new ReadStream(
       this.readStdin.bind(this),
-      this.closeStream.bind(this, CMD_CLOSE_STDIN),
+      this.closeStream.bind(this, CLOSE_STDIN),
     )
     this.stdout = new WriteStream(
-      this.writeStream.bind(this, CMD_WRITE_STDOUT),
-      this.closeStream.bind(this, CMD_CLOSE_STDOUT),
+      this.writeStream.bind(this, WRITE_STDOUT),
+      this.closeStream.bind(this, CLOSE_STDOUT),
     )
     this.stderr = new WriteStream(
-      this.writeStream.bind(this, CMD_WRITE_STDERR),
-      this.closeStream.bind(this, CMD_CLOSE_STDERR),
+      this.writeStream.bind(this, WRITE_STDERR),
+      this.closeStream.bind(this, CLOSE_STDERR),
     )
 
     this.socket.on('close', this.handleClose.bind(this))
     this.socket.on('error', this.handleError.bind(this))
+
+    this.write = promisify(this.socket.write.bind(this.socket))
   }
 
-  private closeStream(
-    command:
-      | typeof CMD_CLOSE_STDIN
-      | typeof CMD_CLOSE_STDOUT
-      | typeof CMD_CLOSE_STDERR,
-  ) {
-    const noop = () => Promise.resolve()
-    return this.sendCommand(
-      command,
-      [],
-      noop,
-      // We don't care if the connection is closed because that
-      // means the stream is already closed.
-      { onConnectionClosed: noop },
-    )
+  private closeStream(cmd: CloseStreamCommand) {
+    return this.send(cmd, [], { onConnectionClosed: () => Promise.resolve() })
   }
 
   private handleClose(): void {
@@ -117,7 +118,7 @@ export class ProcessProxyConnection extends EventEmitter {
   private readInt32LE = () => this.read(4, (buf) => buf.readInt32LE(0))
 
   private async readStdin(maxBytes: number): Promise<Buffer | null> {
-    return this.sendCommand(CMD_READ_STDIN, [uint32(maxBytes)], async () => {
+    return this.invoke(READ_STDIN, [uint32(maxBytes)], async () => {
       const available = await this.readInt32LE()
       // -1: stdin closed, 0: no data available
       if (available <= 0) {
@@ -128,25 +129,21 @@ export class ProcessProxyConnection extends EventEmitter {
     })
   }
 
-  private writeStream(
-    command: typeof CMD_WRITE_STDOUT | typeof CMD_WRITE_STDERR,
-    data: Buffer,
-  ) {
-    return this.sendCommand(command, [uint32(data.length), data], () =>
-      Promise.resolve(),
-    )
+  private writeStream(cmd: WriteStreamCommand, data: Buffer) {
+    return this.send(cmd, [uint32(data.length), data])
   }
 
-  private sendCommand<T>(
-    command: Command,
+  private send(cmd: Command, payload: Buffer[], opts?: CommandOptions) {
+    return this.invoke(cmd, payload, () => Promise.resolve(), opts)
+  }
+
+  private invoke<T>(
+    cmd: Command,
     payload: Buffer[],
     readCb: () => Promise<T>,
-    opts?: {
-      onBeforeSend?: () => Promise<void>
-      onConnectionClosed?: () => Promise<T>
-    },
+    opts?: CommandOptions<T>,
   ): Promise<T> {
-    const send = async () => {
+    const handleInvoke = async () => {
       await opts?.onBeforeSend?.()
 
       if (this.closed || this.hasSentExit) {
@@ -155,11 +152,10 @@ export class ProcessProxyConnection extends EventEmitter {
         }
       }
 
-      const packet = Buffer.concat([uint8(command), ...payload])
-
-      await new Promise<void>((resolve, reject) =>
-        this.socket.write(packet, (e) => (e ? reject(e) : resolve())),
-      )
+      await this.write(uint8(cmd))
+      for (const p of payload) {
+        await this.write(p)
+      }
 
       const statusCode = await this.readInt32LE()
 
@@ -168,16 +164,16 @@ export class ProcessProxyConnection extends EventEmitter {
         throw new Error(errorMsg || `Unknown error ${statusCode} from proxy`)
       }
 
-      this.hasSentExit ||= command === CMD_EXIT
+      this.hasSentExit ||= cmd === EXIT
 
       return readCb()
     }
 
-    return (this.queue = this.queue.then(send, send))
+    return (this.queue = this.queue.then(handleInvoke, handleInvoke))
   }
 
   public async getArgs(): Promise<string[]> {
-    return this.sendCommand(CMD_GET_ARGS, [], async () => {
+    return this.invoke(GET_ARGS, [], async () => {
       const count = await this.readUInt32LE()
       const args: string[] = []
       for (let i = 0; i < count; i++) {
@@ -188,7 +184,7 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   public async getEnv(): Promise<Record<string, string>> {
-    return this.sendCommand(CMD_GET_ENV, [], async () => {
+    return this.invoke(GET_ENV, [], async () => {
       const count = await this.readUInt32LE()
       const env: Record<string, string> = {}
       for (let i = 0; i < count; i++) {
@@ -205,13 +201,11 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   public async getCwd(): Promise<string> {
-    return this.sendCommand(CMD_GET_CWD, [], () =>
-      this.readLengthPrefixedString(),
-    )
+    return this.invoke(GET_CWD, [], () => this.readLengthPrefixedString())
   }
 
-  public async exit(code: number): Promise<void> {
-    return this.sendCommand(CMD_EXIT, [int32(code)], () => Promise.resolve(), {
+  public async exit(code: number) {
+    return this.send(EXIT, [int32(code)], {
       onBeforeSend: () => {
         // Destroy the streams just before sending the exit command
         // to ensure that any pending writes queued before calling exit()
