@@ -33,6 +33,15 @@ const destroyIfNecessary = (...streams: (WriteStream | ReadStream)[]) => {
   streams.filter((x) => !x.destroyed).forEach((x) => x.destroy())
 }
 
+const buf = (length: number, fn: (buf: Buffer) => void) => {
+  const buf = Buffer.alloc(length)
+  fn(buf)
+  return buf
+}
+const uint8 = (num: number) => buf(1, (b) => b.writeUInt8(num, 0))
+const uint32 = (num: number) => buf(4, (b) => b.writeUInt32LE(num, 0))
+const int32 = (num: number) => buf(4, (b) => b.writeInt32LE(num, 0))
+
 export class ProcessProxyConnection extends EventEmitter {
   public readonly stdin: ReadStream
   public readonly stdout: WriteStream
@@ -77,7 +86,7 @@ export class ProcessProxyConnection extends EventEmitter {
     const noop = () => Promise.resolve()
     return this.sendCommand(
       command,
-      undefined,
+      [],
       noop,
       // We don't care if the connection is closed because that
       // means the stream is already closed.
@@ -108,10 +117,7 @@ export class ProcessProxyConnection extends EventEmitter {
   private readInt32LE = () => this.read(4, (buf) => buf.readInt32LE(0))
 
   private async readStdin(maxBytes: number): Promise<Buffer | null> {
-    const payload = Buffer.alloc(4)
-    payload.writeUInt32LE(maxBytes, 0)
-
-    return await this.sendCommand(CMD_READ_STDIN, payload, async () => {
+    return this.sendCommand(CMD_READ_STDIN, [uint32(maxBytes)], async () => {
       const available = await this.readInt32LE()
       // -1: stdin closed, 0: no data available
       if (available <= 0) {
@@ -126,16 +132,14 @@ export class ProcessProxyConnection extends EventEmitter {
     command: typeof CMD_WRITE_STDOUT | typeof CMD_WRITE_STDERR,
     data: Buffer,
   ) {
-    const payload = Buffer.alloc(4 + data.length)
-    payload.writeUInt32LE(data.length, 0)
-    data.copy(payload, 4)
-
-    return this.sendCommand(command, payload, () => Promise.resolve())
+    return this.sendCommand(command, [uint32(data.length), data], () =>
+      Promise.resolve(),
+    )
   }
 
   private sendCommand<T>(
     command: Command,
-    payload: Buffer | undefined,
+    payload: Buffer[],
     readCb: () => Promise<T>,
     opts?: {
       onBeforeSend?: () => Promise<void>
@@ -151,12 +155,7 @@ export class ProcessProxyConnection extends EventEmitter {
         }
       }
 
-      // Build command packet
-      const packet = Buffer.alloc(1 + (payload?.length ?? 0))
-      packet.writeUInt8(command, 0)
-      if (payload) {
-        payload.copy(packet, 1)
-      }
+      const packet = Buffer.concat([uint8(command), ...payload])
 
       await new Promise<void>((resolve, reject) =>
         this.socket.write(packet, (e) => (e ? reject(e) : resolve())),
@@ -178,7 +177,7 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   public async getArgs(): Promise<string[]> {
-    return this.sendCommand(CMD_GET_ARGS, undefined, async () => {
+    return this.sendCommand(CMD_GET_ARGS, [], async () => {
       const count = await this.readUInt32LE()
       const args: string[] = []
       for (let i = 0; i < count; i++) {
@@ -189,7 +188,7 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   public async getEnv(): Promise<Record<string, string>> {
-    return this.sendCommand(CMD_GET_ENV, undefined, async () => {
+    return this.sendCommand(CMD_GET_ENV, [], async () => {
       const count = await this.readUInt32LE()
       const env: Record<string, string> = {}
       for (let i = 0; i < count; i++) {
@@ -206,21 +205,22 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   public async getCwd(): Promise<string> {
-    return this.sendCommand(CMD_GET_CWD, undefined, () =>
+    return this.sendCommand(CMD_GET_CWD, [], () =>
       this.readLengthPrefixedString(),
     )
   }
 
   public async exit(code: number): Promise<void> {
-    const payload = Buffer.alloc(4)
-    payload.writeInt32LE(code, 0)
-    return this.sendCommand(CMD_EXIT, payload, () => Promise.resolve(), {
+    return this.sendCommand(CMD_EXIT, [int32(code)], () => Promise.resolve(), {
       onBeforeSend: () => {
         // Destroy the streams just before sending the exit command
         // to ensure that any pending writes queued before calling exit()
         // has been sent to the proxy process.
         destroyIfNecessary(this.stdin, this.stdout, this.stderr)
         return Promise.resolve()
+      },
+      onConnectionClosed: () => {
+        return Promise.reject(new Error('Connection already closed'))
       },
     })
   }
