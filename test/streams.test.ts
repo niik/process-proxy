@@ -298,7 +298,11 @@ describe('Stream Operations', () => {
     const { promise, handler } = createConnectionHandler<void>(
       async (connection, resolve, reject) => {
         try {
-          closeStdin = (connection as any).closeStdin.bind(connection)
+          const CMD_CLOSE_STDIN = 0x09
+          closeStdin = (connection as any).closeStream.bind(
+            connection,
+            CMD_CLOSE_STDIN,
+          )
           await closeStdin() // first should succeed
           let error: unknown
           try {
@@ -333,7 +337,12 @@ describe('Stream Operations', () => {
     const { promise, handler } = createConnectionHandler<void>(
       async (connection, resolve, reject) => {
         try {
-          closeStdin = (connection as any).closeStdin.bind(connection)
+          const CMD_CLOSE_STDIN = 0x09
+          closeStdin = (connection as any).closeStream.bind(
+            connection,
+            CMD_CLOSE_STDIN,
+          )
+
           connection.stdin.destroy()
           // await delay(100)
           let error: unknown

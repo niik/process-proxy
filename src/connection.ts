@@ -39,7 +39,6 @@ export class ProcessProxyConnection extends EventEmitter {
   public readonly stderr: WriteStream
 
   private queue: Promise<unknown> = Promise.resolve()
-  private write: (data: Buffer | string) => Promise<void>
 
   private hasSentExit: boolean = false
 
@@ -54,21 +53,19 @@ export class ProcessProxyConnection extends EventEmitter {
     super()
     this.stdin = new ReadStream(
       this.readStdin.bind(this),
-      this.closeStdin.bind(this),
+      this.closeStream.bind(this, CMD_CLOSE_STDIN),
     )
     this.stdout = new WriteStream(
-      this.writeStdout.bind(this),
-      this.closeStdout.bind(this),
+      this.writeStream.bind(this, CMD_WRITE_STDOUT),
+      this.closeStream.bind(this, CMD_CLOSE_STDOUT),
     )
     this.stderr = new WriteStream(
-      this.writeStderr.bind(this),
-      this.closeStderr.bind(this),
+      this.writeStream.bind(this, CMD_WRITE_STDERR),
+      this.closeStream.bind(this, CMD_CLOSE_STDERR),
     )
 
     this.socket.on('close', this.handleClose.bind(this))
     this.socket.on('error', this.handleError.bind(this))
-
-    this.write = promisify(this.socket.write).bind(this.socket)
   }
 
   private closeStream(
@@ -98,8 +95,7 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   private async read<T>(length: number, fn: (buf: Buffer) => T): Promise<T> {
-    const buf = await readSocket(this.socket, length)
-    return fn(buf)
+    return fn(await readSocket(this.socket, length))
   }
 
   private readString = (length: number) =>
@@ -115,49 +111,26 @@ export class ProcessProxyConnection extends EventEmitter {
     const payload = Buffer.allocUnsafe(4)
     payload.writeUInt32LE(maxBytes, 0)
 
-    const response = await this.sendCommand(
-      CMD_READ_STDIN,
-      payload,
-      async () => {
-        const available = await this.readInt32LE()
-        // -1: stdin closed, 0: no data available
-        if (available <= 0) {
-          return available === 0 ? Buffer.alloc(0) : null
-        }
+    return await this.sendCommand(CMD_READ_STDIN, payload, async () => {
+      const available = await this.readInt32LE()
+      // -1: stdin closed, 0: no data available
+      if (available <= 0) {
+        return available === 0 ? Buffer.alloc(0) : null
+      }
 
-        return this.read(available, (buf) => buf)
-      },
-    )
-
-    return response
+      return this.read(available, (buf) => buf)
+    })
   }
 
-  private closeStdin() {
-    return this.closeStream(CMD_CLOSE_STDIN)
-  }
-
-  private writeStdout(data: Buffer) {
+  private writeStream(
+    command: typeof CMD_WRITE_STDOUT | typeof CMD_WRITE_STDERR,
+    data: Buffer,
+  ) {
     const payload = Buffer.allocUnsafe(4 + data.length)
     payload.writeUInt32LE(data.length, 0)
     data.copy(payload, 4)
 
-    return this.sendCommand(CMD_WRITE_STDOUT, payload, () => Promise.resolve())
-  }
-
-  public closeStdout() {
-    return this.closeStream(CMD_CLOSE_STDOUT)
-  }
-
-  private writeStderr(data: Buffer) {
-    const payload = Buffer.allocUnsafe(4 + data.length)
-    payload.writeUInt32LE(data.length, 0)
-    data.copy(payload, 4)
-
-    return this.sendCommand(CMD_WRITE_STDERR, payload, () => Promise.resolve())
-  }
-
-  public closeStderr() {
-    return this.closeStream(CMD_CLOSE_STDERR)
+    return this.sendCommand(command, payload, () => Promise.resolve())
   }
 
   private sendCommand<T>(
@@ -185,7 +158,9 @@ export class ProcessProxyConnection extends EventEmitter {
         payload.copy(packet, 1)
       }
 
-      await this.write(packet)
+      await new Promise<void>((resolve, reject) =>
+        this.socket.write(packet, (e) => (e ? reject(e) : resolve())),
+      )
 
       const statusCode = await this.readInt32LE()
 
@@ -207,17 +182,16 @@ export class ProcessProxyConnection extends EventEmitter {
       const count = await this.readUInt32LE()
       const args: string[] = []
       for (let i = 0; i < count; i++) {
-        const arg = await this.readLengthPrefixedString()
-        args.push(arg)
+        args.push(await this.readLengthPrefixedString())
       }
       return args
     })
   }
 
-  public async getEnv(): Promise<{ [key: string]: string }> {
+  public async getEnv(): Promise<Record<string, string>> {
     return this.sendCommand(CMD_GET_ENV, undefined, async () => {
       const count = await this.readUInt32LE()
-      const env: { [key: string]: string } = {}
+      const env: Record<string, string> = {}
       for (let i = 0; i < count; i++) {
         const envVar = await this.readLengthPrefixedString()
         const eqIndex = envVar.indexOf('=')
