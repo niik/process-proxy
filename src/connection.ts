@@ -18,6 +18,18 @@ const CMD_CLOSE_STDIN = 0x09
 const CMD_CLOSE_STDOUT = 0x0a
 const CMD_CLOSE_STDERR = 0x0b
 
+type Command =
+  | typeof CMD_GET_ARGS
+  | typeof CMD_READ_STDIN
+  | typeof CMD_WRITE_STDOUT
+  | typeof CMD_WRITE_STDERR
+  | typeof CMD_GET_CWD
+  | typeof CMD_GET_ENV
+  | typeof CMD_EXIT
+  | typeof CMD_CLOSE_STDIN
+  | typeof CMD_CLOSE_STDOUT
+  | typeof CMD_CLOSE_STDERR
+
 export class ProcessProxyConnection extends EventEmitter {
   public readonly stdin: ReadStream
   public readonly stdout: WriteStream
@@ -151,7 +163,7 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   private sendCommand<T>(
-    command: number,
+    command: Command,
     payload: Buffer | undefined,
     readCb: () => Promise<T>,
     opts?: {
