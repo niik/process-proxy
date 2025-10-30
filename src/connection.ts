@@ -108,7 +108,7 @@ export class ProcessProxyConnection extends EventEmitter {
   private readInt32LE = () => this.read(4, (buf) => buf.readInt32LE(0))
 
   private async readStdin(maxBytes: number): Promise<Buffer | null> {
-    const payload = Buffer.allocUnsafe(4)
+    const payload = Buffer.alloc(4)
     payload.writeUInt32LE(maxBytes, 0)
 
     return await this.sendCommand(CMD_READ_STDIN, payload, async () => {
@@ -126,7 +126,7 @@ export class ProcessProxyConnection extends EventEmitter {
     command: typeof CMD_WRITE_STDOUT | typeof CMD_WRITE_STDERR,
     data: Buffer,
   ) {
-    const payload = Buffer.allocUnsafe(4 + data.length)
+    const payload = Buffer.alloc(4 + data.length)
     payload.writeUInt32LE(data.length, 0)
     data.copy(payload, 4)
 
@@ -212,7 +212,7 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   public async exit(code: number): Promise<void> {
-    const payload = Buffer.allocUnsafe(4)
+    const payload = Buffer.alloc(4)
     payload.writeInt32LE(code, 0)
     return this.sendCommand(CMD_EXIT, payload, () => Promise.resolve(), {
       onBeforeSend: () => {
