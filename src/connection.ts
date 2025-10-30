@@ -4,7 +4,6 @@ import { ReadStream } from './read-stream.js'
 import { WriteStream } from './write-stream.js'
 import { promisify } from 'util'
 import { readSocket } from './read-socket.js'
-import Stream from 'stream'
 
 // Command identifiers
 const CMD_GET_ARGS = 0x01
@@ -121,16 +120,12 @@ export class ProcessProxyConnection extends EventEmitter {
       payload,
       async () => {
         const available = await this.readInt32LE()
-        if (available < 0) {
-          // stdin closed
-          return null
-        } else if (available === 0) {
-          // No data available
-          return Buffer.alloc(0)
-        } else {
-          // Data available
-          return this.read(available, (buf) => buf)
+        // -1: stdin closed, 0: no data available
+        if (available <= 0) {
+          return available === 0 ? Buffer.alloc(0) : null
         }
+
+        return this.read(available, (buf) => buf)
       },
     )
 
