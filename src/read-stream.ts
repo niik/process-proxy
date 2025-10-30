@@ -1,5 +1,4 @@
 import { Readable } from 'stream'
-import { type ProcessProxyConnection } from './connection.js'
 
 export class ReadStream extends Readable {
   public pollingInterval = 100
