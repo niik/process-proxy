@@ -29,6 +29,8 @@ export class ReadStream extends Readable {
   }
 
   _destroy(err: Error | null, callback: (error?: Error | null) => void): void {
+    // TODO: Which error should we prioritize? The one from the destroy call or
+    // the one from the closeStdin call?
     this.closeStdin()
       .then(() => callback(err))
       .catch((closeErr) => callback(closeErr))
