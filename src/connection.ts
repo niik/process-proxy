@@ -138,7 +138,7 @@ export class ProcessProxyConnection extends EventEmitter {
     payload: Buffer | undefined,
     readCb: () => Promise<T>,
     opts?: {
-      onBeforeSend?: () => Promise<T>
+      onBeforeSend?: () => Promise<void>
       onConnectionClosed?: () => Promise<T>
     },
   ): Promise<T> {
