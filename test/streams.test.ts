@@ -328,7 +328,7 @@ describe('Stream Operations', () => {
     await testServer.close()
   })
 
-  it.only('should throw when calling closeStdin after stdin.destroy()', async () => {
+  it('should throw when calling closeStdin after stdin.destroy()', async () => {
     let closeStdin: () => Promise<void>
     const { promise, handler } = createConnectionHandler<void>(
       async (connection, resolve, reject) => {
@@ -350,6 +350,43 @@ describe('Stream Operations', () => {
             (error as Error).message.length > 0,
             'Error message should not be empty',
           )
+          await connection.exit(0)
+          resolve()
+        } catch (error) {
+          reject(error as Error)
+        }
+      },
+    )
+    const testServer = await createTestServer(handler)
+    const child = spawnNativeProcess(testServer.port)
+    await promise
+    await waitForExit(child)
+    await testServer.close()
+  })
+
+  it('should allow calling destroy multiple times safely on stdin, stdout, stderr', async () => {
+    const { promise, handler } = createConnectionHandler<void>(
+      async (connection, resolve, reject) => {
+        try {
+          // stdin (ReadStream)
+          assert.doesNotThrow(() => {
+            connection.stdin.destroy()
+            connection.stdin.destroy()
+            connection.stdin.destroy()
+          }, 'stdin.destroy() should be idempotent')
+
+          // stdout (WriteStream)
+          assert.doesNotThrow(() => {
+            connection.stdout.destroy()
+            connection.stdout.destroy()
+          }, 'stdout.destroy() should be idempotent')
+
+          // stderr (WriteStream)
+          assert.doesNotThrow(() => {
+            connection.stderr.destroy()
+            connection.stderr.destroy()
+          }, 'stderr.destroy() should be idempotent')
+
           await connection.exit(0)
           resolve()
         } catch (error) {

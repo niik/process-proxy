@@ -5,6 +5,7 @@ export class ReadStream extends Readable {
 
   constructor(
     private readonly readStdin: (maxBytes: number) => Promise<Buffer | null>,
+    private readonly closeStdin: () => Promise<void>,
   ) {
     super()
   }
@@ -25,5 +26,11 @@ export class ReadStream extends Readable {
         this.push(data)
       })
       .catch((err) => this.destroy(err))
+  }
+
+  _destroy(err: Error | null, callback: (error?: Error | null) => void): void {
+    this.closeStdin()
+      .then(() => callback(err))
+      .catch((closeErr) => callback(closeErr))
   }
 }

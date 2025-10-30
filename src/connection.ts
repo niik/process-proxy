@@ -49,13 +49,18 @@ export class ProcessProxyConnection extends EventEmitter {
     public readonly token: string,
   ) {
     super()
-    this.stdin = new ReadStream(this.readStdin.bind(this))
-    this.stdout = new WriteStream(this.writeStdout.bind(this))
-    this.stderr = new WriteStream(this.writeStderr.bind(this))
-
-    this.stdin.on('close', this.closeStdin.bind(this))
-    this.stdout.on('close', this.closeStdout.bind(this))
-    this.stderr.on('close', this.closeStderr.bind(this))
+    this.stdin = new ReadStream(
+      this.readStdin.bind(this),
+      this.closeStdin.bind(this),
+    )
+    this.stdout = new WriteStream(
+      this.writeStdout.bind(this),
+      this.closeStdout.bind(this),
+    )
+    this.stderr = new WriteStream(
+      this.writeStderr.bind(this),
+      this.closeStderr.bind(this),
+    )
 
     this.socket.on('close', this.handleClose.bind(this))
     this.socket.on('error', this.handleError.bind(this))
