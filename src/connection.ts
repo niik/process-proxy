@@ -30,6 +30,10 @@ type Command =
   | typeof CMD_CLOSE_STDOUT
   | typeof CMD_CLOSE_STDERR
 
+const destroyIfNecessary = (...streams: (WriteStream | ReadStream)[]) => {
+  streams.filter((x) => !x.destroyed).forEach((x) => x.destroy())
+}
+
 export class ProcessProxyConnection extends EventEmitter {
   public readonly stdin: ReadStream
   public readonly stdout: WriteStream
@@ -86,10 +90,7 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   private handleClose(): void {
-    this.stdin.destroy()
-    this.stdout.destroy()
-    this.stderr.destroy()
-
+    destroyIfNecessary(this.stdin, this.stdout, this.stderr)
     this.emit('close')
   }
 
@@ -169,10 +170,13 @@ export class ProcessProxyConnection extends EventEmitter {
     payload: Buffer | undefined,
     readCb: () => Promise<T>,
     opts?: {
+      onBeforeSend?: () => Promise<T>
       onConnectionClosed?: () => Promise<T>
     },
   ): Promise<T> {
     const send = async () => {
+      await opts?.onBeforeSend?.()
+
       if (this.closed || this.hasSentExit) {
         if (opts?.onConnectionClosed) {
           return opts.onConnectionClosed()
@@ -239,11 +243,16 @@ export class ProcessProxyConnection extends EventEmitter {
   }
 
   public async exit(code: number): Promise<void> {
-    this.stdout.end()
-    this.stderr.end()
-
     const payload = Buffer.allocUnsafe(4)
     payload.writeInt32LE(code, 0)
-    return this.sendCommand(CMD_EXIT, payload, () => Promise.resolve())
+    return this.sendCommand(CMD_EXIT, payload, () => Promise.resolve(), {
+      onBeforeSend: () => {
+        // Destroy the streams just before sending the exit command
+        // to ensure that any pending writes queued before calling exit()
+        // has been sent to the proxy process.
+        destroyIfNecessary(this.stdin, this.stdout, this.stderr)
+        return Promise.resolve()
+      },
+    })
   }
 }
