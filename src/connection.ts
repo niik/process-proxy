@@ -92,21 +92,18 @@ export class ProcessProxyConnection extends EventEmitter {
     this.emit('error', error)
   }
 
-  private read(length: number) {
-    return readSocket(this.socket, length)
+  private async read<T>(length: number, fn: (buf: Buffer) => T): Promise<T> {
+    const buf = await readSocket(this.socket, length)
+    return fn(buf)
   }
 
   private async readLengthPrefixedString() {
-    const lenBuf = await this.read(4)
-    const strLen = lenBuf.readUInt32LE(0)
-    const strBuf = await this.read(strLen)
-    return strBuf.toString('utf8')
+    const strLen = await this.readUInt32LE()
+    return await this.read(strLen, (buf) => buf.toString('utf8'))
   }
 
-  private async readUInt32(): Promise<number> {
-    const buf = await this.read(4)
-    return buf.readUInt32LE(0)
-  }
+  private readUInt32LE = () => this.read(4, (buf) => buf.readUInt32LE(0))
+  private readInt32LE = () => this.read(4, (buf) => buf.readInt32LE(0))
 
   private async readStdin(maxBytes: number): Promise<Buffer | null> {
     const payload = Buffer.allocUnsafe(4)
@@ -116,17 +113,16 @@ export class ProcessProxyConnection extends EventEmitter {
       CMD_READ_STDIN,
       payload,
       async () => {
-        const statusBuf = await this.read(4)
-        const status = statusBuf.readInt32LE(0)
-        if (status < 0) {
+        const available = await this.readInt32LE()
+        if (available < 0) {
           // stdin closed
           return null
-        } else if (status === 0) {
+        } else if (available === 0) {
           // No data available
           return Buffer.alloc(0)
         } else {
           // Data available
-          return this.read(status)
+          return this.read(available, (buf) => buf)
         }
       },
     )
@@ -186,7 +182,7 @@ export class ProcessProxyConnection extends EventEmitter {
 
       await this.write(packet)
 
-      const statusCode = await this.readUInt32()
+      const statusCode = await this.readInt32LE()
 
       if (statusCode !== 0) {
         const errorMsg = await this.readLengthPrefixedString()
@@ -204,7 +200,7 @@ export class ProcessProxyConnection extends EventEmitter {
 
   public async getArgs(): Promise<string[]> {
     return this.sendCommand(CMD_GET_ARGS, undefined, async () => {
-      const count = await this.readUInt32()
+      const count = await this.readUInt32LE()
       const args: string[] = []
       for (let i = 0; i < count; i++) {
         const arg = await this.readLengthPrefixedString()
@@ -216,7 +212,7 @@ export class ProcessProxyConnection extends EventEmitter {
 
   public async getEnv(): Promise<{ [key: string]: string }> {
     return this.sendCommand(CMD_GET_ENV, undefined, async () => {
-      const count = await this.readUInt32()
+      const count = await this.readUInt32LE()
       const env: { [key: string]: string } = {}
       for (let i = 0; i < count; i++) {
         const envVar = await this.readLengthPrefixedString()
