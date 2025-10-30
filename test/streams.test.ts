@@ -344,7 +344,6 @@ describe('Stream Operations', () => {
           )
 
           connection.stdin.destroy()
-          // await delay(100)
           let error: unknown
           try {
             await closeStdin()
