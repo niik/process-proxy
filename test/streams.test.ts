@@ -234,4 +234,62 @@ describe('Stream Operations', () => {
 
     await testServer.close()
   })
+
+  it('should successfully write and receive a large payload through stdout and stderr', async () => {
+    const payloadStdout = Buffer.alloc(1024 * 1024, 'A') // 1 MB of 'A'
+    const payloadStderr = Buffer.alloc(1024 * 1024, 'B') // 1 MB of 'B'
+
+    const { promise, handler } = createConnectionHandler<void>(
+      async (connection, resolve, reject) => {
+        try {
+          connection.stdout.write(payloadStdout, (err) => {
+            if (err) return reject(err)
+            connection.stderr.write(payloadStderr, (err2) => {
+              if (err2) return reject(err2)
+              connection.exit(0).then(resolve, reject)
+            })
+          })
+        } catch (error) {
+          reject(error as Error)
+        }
+      },
+    )
+
+    const testServer = await createTestServer(handler)
+    const child = spawnNativeProcess(testServer.port)
+
+    let gotStdout = Buffer.alloc(0)
+    let gotStderr = Buffer.alloc(0)
+    const p1 = new Promise<void>((resolve) => {
+      child.stdout.on('data', (d) => {
+        gotStdout = Buffer.concat([gotStdout, d])
+      })
+      child.stdout.on('end', resolve)
+    })
+    const p2 = new Promise<void>((resolve) => {
+      child.stderr.on('data', (d) => {
+        gotStderr = Buffer.concat([gotStderr, d])
+      })
+      child.stderr.on('end', resolve)
+    })
+
+    await promise
+    await Promise.all([p1, p2])
+    await waitForExit(child)
+
+    assert.strictEqual(
+      gotStdout.length,
+      payloadStdout.length,
+      'stdout length matches',
+    )
+    assert.strictEqual(
+      gotStderr.length,
+      payloadStderr.length,
+      'stderr length matches',
+    )
+    assert.ok(gotStdout.equals(payloadStdout), 'stdout payload matches')
+    assert.ok(gotStderr.equals(payloadStderr), 'stderr payload matches')
+
+    await testServer.close()
+  })
 })
