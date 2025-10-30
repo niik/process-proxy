@@ -27,13 +27,19 @@ const waitForWritableFinished = (stream: Writable) => {
 }
 
 const exitWithError = (
+  id: string,
   connection: ProcessProxyConnection,
   message: string,
   exitCode = 1,
 ) => {
   return new Promise<void>((resolve, reject) => {
     connection.stderr.end(`${message}\n`, () => {
-      connection.exit(exitCode).then(resolve, reject)
+      connection.exit(exitCode).then(resolve, (err) => {
+        console.error(
+          `${id}: failed to exit proxy: ${err instanceof Error ? err.message : String(err)}`,
+        )
+        resolve()
+      })
     })
   })
 }
@@ -54,6 +60,7 @@ async function main() {
       if (!cmd) {
         console.error(`${id}: ERROR: No command provided to proxy`)
         await exitWithError(
+          id,
           connection,
           `Error: No command provided to proxy\nUsage: ${argv[0]} <command> [args...]`,
         )
@@ -61,11 +68,13 @@ async function main() {
       }
 
       connection.on('close', () => {
-        if (child.connected) {
-          console.log(`${id}: connection closed`)
-          child.kill()
-        }
-        // TODO: Also ensure child process is killed?
+        console.log(`${id}: connection closed`)
+        abortController.abort()
+      })
+
+      connection.on('error', (err) => {
+        console.error(`${id}: connection error:`, err)
+        abortController.abort()
       })
 
       const shortenedPath = process.env.HOME
@@ -74,12 +83,28 @@ async function main() {
 
       console.log(`${shortenedPath} $ ${cmd} ${args.join(' ')}`)
 
-      const child = spawn(cmd, args, { env, cwd })
+      const abortController = new AbortController()
+
+      const child = spawn(cmd, args, {
+        env,
+        cwd,
+        signal: abortController.signal,
+      })
         .on('spawn', () => {
           // Pipe data between the native process and copilot
-          connection.stdin.pipe(child.stdin)
-          child.stdout.pipe(connection.stdout)
-          child.stderr.pipe(connection.stderr)
+          connection.stdin.pipe(child.stdin).on('error', (err) => {
+            console.error(`${id}: stdin error:`, err)
+            abortController.abort()
+          })
+
+          child.stdout.pipe(connection.stdout).on('error', (err) => {
+            console.error(`${id}: stdout error:`, err)
+            abortController.abort()
+          })
+          child.stderr.pipe(connection.stderr).on('error', (err) => {
+            console.error(`${id}: stderr error:`, err)
+            abortController.abort()
+          })
 
           child.on('close', async (code, signal) => {
             // Ensure all data is flushed to the copilot before exiting
@@ -92,14 +117,17 @@ async function main() {
             if (code !== 0) {
               console.log(`${id}: exiting proxy with code ${code}`)
             }
-            await connection.exit(code ?? 0)
+            await connection.exit(code ?? 0).catch((err) => {
+              console.error(`${id}: failed to exit proxy: ${err.message}`)
+            })
           })
         })
         .on('error', async (err) => {
-          console.error(`${id}: Failed to start child:`, err)
+          console.error(`${id}: child error: ${err.message}`)
           await exitWithError(
+            id,
             connection,
-            `Error: Failed to start command: ${err.message}`,
+            `Error: command failed: ${err.message}`,
           )
         })
     },
