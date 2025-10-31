@@ -36,7 +36,7 @@ for (const arch of getTargetArchs()) {
   console.log(`Building for architecture: ${arch}`)
 
   await new Promise((resolve, reject) => {
-    spawn('nsx' + ['node-gyp', 'rebuild', '--silent', `--arch=${arch}`], {
+    spawn('npx', ['node-gyp', 'rebuild', '--silent', `--arch=${arch}`], {
       stdio: 'inherit',
     })
       .on('close', async (code) => {
