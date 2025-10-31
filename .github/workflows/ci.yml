@@ -37,3 +37,11 @@ jobs:
 
       - name: Run lint
         run: npm run lint
+
+      - name: Build native for all platforms
+        run: node script/build.mjs
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: process-proxy-builds
+          path: bin/
