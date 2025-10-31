@@ -37,7 +37,8 @@ for (const arch of getTargetArchs()) {
 
   await new Promise((resolve, reject) => {
     spawn(
-      'node_modules/.bin/node-gyp',
+      'node_modules/.bin/node-gyp' +
+        (process.platform === 'win32' ? '.cmd' : ''),
       ['rebuild', '--silent', `--arch=${arch}`],
       { stdio: 'inherit' },
     )
