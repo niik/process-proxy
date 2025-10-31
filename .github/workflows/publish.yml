@@ -25,3 +25,5 @@ jobs:
 
       - name: Show directory contents
         run: ls -lR ./bin
+      - name: Publish to npm
+        run: npm pack

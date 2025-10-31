@@ -2,6 +2,7 @@ import { spawn } from 'child_process'
 import { copyFile, mkdir, readdir, rm, access } from 'fs/promises'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
+import { getTargetArchs } from './get-target-archs.mjs'
 
 const projectDir = fileURLToPath(new URL('..', import.meta.url))
 process.chdir(projectDir)
@@ -10,16 +11,6 @@ const pathExists = (p) =>
   access(p)
     .then(() => true)
     .catch(() => false)
-
-const getTargetArchs = () => {
-  if (process.platform === 'darwin') {
-    return ['x64', 'arm64']
-  } else if (process.platform === 'win32') {
-    return ['arm64', 'x64', 'ia32']
-  } else if (process.platform === 'linux') {
-    return ['x64', 'arm64']
-  }
-}
 
 if (await pathExists('bin')) {
   for (const file of await readdir('bin', { withFileTypes: true })) {
