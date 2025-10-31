@@ -60,6 +60,8 @@ jobs:
         run: npm version ${{ github.event.inputs.version }}
       - name: Show commit
         run: git log -1
+      - name: Update npm to latest version
+        run: npm install -g npm@latest
       - name: Publish package
         run: npm publish ${{ github.event.inputs['dry-run'] == 'true' && '--dry-run' || '' }}
       - name: Publish tag
