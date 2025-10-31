@@ -1,8 +1,7 @@
-import { exec, execFile, spawn } from 'child_process'
+import { spawn } from 'child_process'
 import { copyFile, mkdir, readdir, rm, access } from 'fs/promises'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
-import { promisify } from 'util'
 
 const projectDir = fileURLToPath(new URL('..', import.meta.url))
 process.chdir(projectDir)
@@ -36,7 +35,7 @@ for (const arch of getTargetArchs()) {
   console.log(`Building for architecture: ${arch}`)
 
   await new Promise((resolve, reject) => {
-    spawn('npx', ['node-gyp', 'rebuild', '--silent', `--arch=${arch}`], {
+    spawn('node', [join('node_modules', 'node-gyp', 'bin', 'node-gyp.js'), 'rebuild', '--silent', `--arch=${arch}`], {
       stdio: 'inherit',
     })
       .on('close', async (code) => {
