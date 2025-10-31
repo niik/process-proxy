@@ -23,4 +23,4 @@ jobs:
           path: ./bin
 
       - name: Show directory contents
-        run: ls -la ./bin
+        run: ls -lR ./bin
