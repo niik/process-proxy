@@ -7,12 +7,12 @@ on:
   pull_request:
     branches:
       - main
-  workflow_call:
+  workflow_dispatch:
     inputs:
-      ref:
-        description: 'Git ref to checkout'
-        required: true
-        type: string
+      version:
+        description: 'Version to publish'
+        required: false
+        default: 'main'
 
 jobs:
   build-and-test:
@@ -25,8 +25,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -51,3 +49,16 @@ jobs:
         with:
           name: process-proxy-${{ runner.os }}
           path: bin/process-proxy-*
+  publish:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: ./bin
