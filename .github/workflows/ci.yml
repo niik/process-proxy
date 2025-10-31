@@ -43,5 +43,4 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: process-proxy-builds
           path: bin/process-proxy-*
