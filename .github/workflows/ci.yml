@@ -38,8 +38,6 @@ jobs:
       - name: Run lint
         run: npm run lint
 
-      - name: Build for all architectures
-        run: node script/build.mjs
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5
         with:
