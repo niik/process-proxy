@@ -12,7 +12,6 @@
     }
   },
   "scripts": {
-    "install": "node-gyp rebuild",
     "build": "npm run build:native && npm run build:ts",
     "build:native": "node script/build.mjs",
     "build:ts": "tsc",
