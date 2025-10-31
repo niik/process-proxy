@@ -61,13 +61,12 @@ jobs:
       - name: Pack package
         run: npm pack
       - name: Publish package
-        if: ${{ github.event.inputs['dry-run'] == false }}
+        if:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish
+        run: npm publish ${{ github.event.inputs['dry-run'] == true && '--dry-run' || '' }}
       - name: Publish tag
-        if: ${{ github.event.inputs['dry-run'] == false }}
-        run: git push origin --tags
+        run: git push origin --tags ${{ github.event.inputs['dry-run'] == true && '--dry-run' || '' }}
       - name: Upload package artifact
         uses: actions/upload-artifact@v5
         with:
