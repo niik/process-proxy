@@ -44,16 +44,3 @@ jobs:
         with:
           name: process-proxy-${{ runner.os }}
           path: bin/process-proxy-*
-  publish:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v5
-        with:
-          path: ./bin
