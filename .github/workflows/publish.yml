@@ -50,7 +50,7 @@ jobs:
         id: get_author
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api users/${{github.actor}} | jq -j .name
+        run: echo name=`gh api users/niik | jq -j .name` >> $GITHUB_OUTPUT
       - name: Set version
         env:
           GIT_AUTHOR_NAME: ${{steps.get_author.outputs.name || github.actor}}
