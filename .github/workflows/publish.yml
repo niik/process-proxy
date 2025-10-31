@@ -5,17 +5,29 @@ on:
       version:
         description: 'Version to publish'
         required: true
-        default: '1.0.0'
+      dry-run:
+        description: 'Dry run (do not publish)'
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   build:
     uses: ./.github/workflows/ci.yml
   publish:
+    permissions:
+      contents: write
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
 
       - name: Download build artifacts
         uses: actions/download-artifact@v5
@@ -23,7 +35,25 @@ jobs:
           path: ./bin
           merge-multiple: true
 
+      - name: Install dependencies
+        run: npm install
+      - name: Build package
+        run: npm run build:ts
       - name: Show directory contents
         run: ls -lR ./bin
-      - name: Publish to npm
+      - name: Set version
+        run: npm version ${{ github.event.inputs.version }}
+      - name: Pack package
         run: npm pack
+      - name: Publish package
+        if: ${{ github.event.inputs['dry-run'] == false }}
+        run: npm publish
+      - name: Publish tag
+        if: ${{ github.event.inputs['dry-run'] == false }}
+        run: |
+          git push origin --tags
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: package
+          path: ./*.tgz
