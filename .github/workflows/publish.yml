@@ -44,6 +44,9 @@ jobs:
       - name: git status
         run: git status
       - name: Set version
+        env:
+          GIT_COMMITTER_NAME: ${{github.actor}}
+          GIT_COMMITTER_EMAIL: ${{github.actor_id}}+${{github.actor}}@users.noreply.github.com
         run: npm version ${{ github.event.inputs.version }}
       - name: Pack package
         run: npm pack
