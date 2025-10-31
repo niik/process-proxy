@@ -41,5 +41,5 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: process-proxy-${{ matrix.os }}
+          name: process-proxy-${{ runner.os }}
           path: bin/process-proxy-*
