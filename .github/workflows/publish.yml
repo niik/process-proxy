@@ -48,6 +48,8 @@ jobs:
           GIT_COMMITTER_NAME: ${{github.actor}}
           GIT_COMMITTER_EMAIL: ${{github.actor_id}}+${{github.actor}}@users.noreply.github.com
         run: npm version ${{ github.event.inputs.version }}
+      - name: Show commit
+        run: git log -1
       - name: Pack package
         run: npm pack
       - name: Publish package
