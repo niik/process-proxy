@@ -61,14 +61,11 @@ jobs:
       - name: Show commit
         run: git log -1
       - name: Publish package
-        if:
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish ${{ github.event.inputs['dry-run'] == true && '--dry-run' || '' }}
+        run: npm publish ${{ github.event.inputs['dry-run'] && '--dry-run' }}
       - name: Publish tag
-        run: git push origin --tags ${{ github.event.inputs['dry-run'] == true && '--dry-run' || '' }}
+        run: git push origin --tags ${{ github.event.inputs['dry-run'] && '--dry-run' }}
       - name: Upload package artifact
         uses: actions/upload-artifact@v5
         with:
           name: package
-          path: ./*.tgz
+          path: ./process-proxy-*.tar.gz
