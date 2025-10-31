@@ -7,12 +7,7 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish'
-        required: false
-        default: 'main'
+  workflow_call:
 
 jobs:
   build-and-test:
