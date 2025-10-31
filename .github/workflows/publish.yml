@@ -39,12 +39,10 @@ jobs:
         run: npm install
       - name: Build package
         run: npm run build:ts
-      - name: Show directory contents
-        run: ls -lR ./bin
-      - name: git status
-        run: git status
       - name: Get author name
         id: get_author
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: gh api users/${{github.actor}} | jq -j .name
       - name: Set version
         env:
