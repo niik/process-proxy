@@ -6,6 +6,7 @@ import { getTargetArchs } from './get-target-archs.mjs'
 
 const projectDir = fileURLToPath(new URL('..', import.meta.url))
 const rebuild = process.argv.includes('--rebuild')
+const allArchs = process.argv.includes('--all-archs')
 process.chdir(projectDir)
 
 const pathExists = (p) =>
@@ -25,7 +26,9 @@ if (await pathExists('bin')) {
   await mkdir('bin')
 }
 
-for (const arch of getTargetArchs()) {
+const archs = allArchs ? getTargetArchs() : [process.arch]
+
+for (const arch of archs) {
   const ext = process.platform === 'win32' ? '.exe' : ''
   const filename = `process-proxy-${process.platform}-${arch}${ext}`
   const destination = join('bin', filename)

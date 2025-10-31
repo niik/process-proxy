@@ -16,6 +16,7 @@
     "build": "npm run build:native && npm run build:ts",
     "rebuild": "npm run rebuild:native && npm run build:ts",
     "build:native": "node script/build.mjs",
+    "build:native:all": "node script/build.mjs --all-archs",
     "rebuild:native": "node script/build.mjs --rebuild",
     "build:ts": "tsc",
     "clean": "rm -rf dist build",
