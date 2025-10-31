@@ -68,4 +68,4 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: package
-          path: ./process-proxy-*.tar.gz
+          path: ./process-proxy-*.tar
