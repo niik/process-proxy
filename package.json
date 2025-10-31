@@ -44,6 +44,10 @@
   ],
   "author": "Markus Olsson <j.markus.olsson@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/niik/process-proxy"
+  },
   "engines": {
     "node": ">=22"
   },
