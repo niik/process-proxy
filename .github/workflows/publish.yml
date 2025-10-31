@@ -41,6 +41,8 @@ jobs:
         run: npm run build:ts
       - name: Show directory contents
         run: ls -lR ./bin
+      - name: git status
+        run: git status
       - name: Set version
         run: npm version ${{ github.event.inputs.version }}
       - name: Pack package
