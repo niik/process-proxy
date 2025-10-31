@@ -104,9 +104,10 @@ export function getProxyCommandPath(): string {
   const modulePath = fileURLToPath(moduleUrl)
   const moduleDir = dirname(modulePath)
 
-  // Navigate from dist/ to the project root, then to build/Release/
-  const executableName =
-    platform() === 'win32' ? 'process-proxy.exe' : 'process-proxy'
+  const baseName = `process-proxy-${process.platform}-${process.arch}`
 
-  return join(moduleDir, '..', 'build', 'Release', executableName)
+  // Navigate from dist/ to the project root, then to build/Release/
+  const executableName = platform() === 'win32' ? `${baseName}.exe` : baseName
+
+  return join(moduleDir, '..', 'bin', executableName)
 }
