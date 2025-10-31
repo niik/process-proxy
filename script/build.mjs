@@ -35,9 +35,18 @@ for (const arch of getTargetArchs()) {
   console.log(`Building for architecture: ${arch}`)
 
   await new Promise((resolve, reject) => {
-    spawn('node', [join('node_modules', 'node-gyp', 'bin', 'node-gyp.js'), 'rebuild', '--silent', `--arch=${arch}`], {
-      stdio: 'inherit',
-    })
+    spawn(
+      'node',
+      [
+        join('node_modules', 'node-gyp', 'bin', 'node-gyp.js'),
+        'rebuild',
+        '--silent',
+        `--arch=${arch}`,
+      ],
+      {
+        stdio: 'inherit',
+      },
+    )
       .on('close', async (code) => {
         if (code !== 0) {
           console.error(`Build failed for architecture: ${arch}`)
