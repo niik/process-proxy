@@ -29,6 +29,7 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Download build artifacts
         uses: actions/download-artifact@v5
@@ -62,7 +63,7 @@ jobs:
       - name: Publish package
         if:
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish ${{ github.event.inputs['dry-run'] == true && '--dry-run' || '' }}
       - name: Publish tag
         run: git push origin --tags ${{ github.event.inputs['dry-run'] == true && '--dry-run' || '' }}
