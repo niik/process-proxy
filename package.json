@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "install": "npm run build",
+    "install": "npm run build:native",
     "build": "npm run build:native && npm run build:ts",
     "rebuild": "npm run rebuild:native && npm run build:ts",
     "build:native": "node script/build.mjs",
