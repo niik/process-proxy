@@ -34,7 +34,12 @@ jobs:
         with:
           path: ./bin
           merge-multiple: true
-
+      - name: List files
+        run: ls -la ./bin
+      - name: Make binaries executable
+        run: chmod +x ./bin/process-proxy-darwin-* ./bin/process-proxy-linux-*
+      - name: List files
+        run: ls -la ./bin
       - name: Install dependencies
         run: npm install
       - name: Build package
