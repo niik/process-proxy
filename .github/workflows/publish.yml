@@ -4,6 +4,7 @@ on:
     inputs:
       version:
         description: 'Version to publish'
+        default: 'minor'
         required: true
       dry-run:
         description: 'Dry run (do not publish)'
@@ -58,8 +59,6 @@ jobs:
         run: npm version ${{ github.event.inputs.version }}
       - name: Show commit
         run: git log -1
-      - name: Pack package
-        run: npm pack
       - name: Publish package
         if:
         env:
