@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import { getTargetArchs } from './get-target-archs.mjs'
 
 const projectDir = fileURLToPath(new URL('..', import.meta.url))
+const rebuild = process.argv.includes('--rebuild')
 process.chdir(projectDir)
 
 const pathExists = (p) =>
@@ -13,9 +14,11 @@ const pathExists = (p) =>
     .catch(() => false)
 
 if (await pathExists('bin')) {
-  for (const file of await readdir('bin', { withFileTypes: true })) {
-    if (file.isFile() && file.name.startsWith('process-proxy-')) {
-      await rm(join('bin', file.name))
+  if (rebuild) {
+    for (const file of await readdir('bin', { withFileTypes: true })) {
+      if (file.isFile() && file.name.startsWith('process-proxy-')) {
+        await rm(join('bin', file.name))
+      }
     }
   }
 } else {
@@ -23,6 +26,17 @@ if (await pathExists('bin')) {
 }
 
 for (const arch of getTargetArchs()) {
+  const ext = process.platform === 'win32' ? '.exe' : ''
+  const filename = `process-proxy-${process.platform}-${arch}${ext}`
+  const destination = join('bin', filename)
+
+  if (!rebuild && (await pathExists(destination))) {
+    console.log(
+      `Binary already exists for architecture: ${arch}, skipping build.`,
+    )
+    continue
+  }
+
   console.log(`Building for architecture: ${arch}`)
 
   await new Promise((resolve, reject) => {
@@ -44,13 +58,7 @@ for (const arch of getTargetArchs()) {
           process.exit(code)
         } else {
           console.log(`Build succeeded for architecture: ${arch}`)
-          const ext = process.platform === 'win32' ? '.exe' : ''
-          const filename = `process-proxy-${process.platform}-${arch}${ext}`
-
-          await copyFile(
-            join('build', 'Release', filename),
-            join('bin', filename),
-          )
+          await copyFile(join('build', 'Release', filename), destination)
           resolve()
         }
       })
