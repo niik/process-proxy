@@ -36,12 +36,9 @@ for (const arch of getTargetArchs()) {
   console.log(`Building for architecture: ${arch}`)
 
   await new Promise((resolve, reject) => {
-    spawn(
-      'node_modules/.bin/node-gyp' +
-        (process.platform === 'win32' ? '.cmd' : ''),
-      ['rebuild', '--silent', `--arch=${arch}`],
-      { stdio: 'inherit' },
-    )
+    spawn('nsx' + ['node-gyp', 'rebuild', '--silent', `--arch=${arch}`], {
+      stdio: 'inherit',
+    })
       .on('close', async (code) => {
         if (code !== 0) {
           console.error(`Build failed for architecture: ${arch}`)
