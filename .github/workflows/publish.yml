@@ -61,9 +61,9 @@ jobs:
       - name: Show commit
         run: git log -1
       - name: Publish package
-        run: npm publish ${{ github.event.inputs['dry-run'] && '--dry-run' }}
+        run: npm publish ${{ github.event.inputs['dry-run'] == 'true' && '--dry-run' }}
       - name: Publish tag
-        run: git push origin --tags ${{ github.event.inputs['dry-run'] && '--dry-run' }}
+        run: git push origin --tags ${{ github.event.inputs['dry-run'] == 'true' && '--dry-run' }}
       - name: Upload package artifact
         uses: actions/upload-artifact@v5
         with:
