@@ -1,6 +1,6 @@
 {
   "name": "process-proxy",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "description": "Control a native executable proxy from Node, reading its stdin, writing to its stdout, and stderr streams",
   "type": "module",
   "main": "./dist/index.js",
