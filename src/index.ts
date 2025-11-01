@@ -3,8 +3,8 @@ import { ProcessProxyConnection } from './connection.js'
 export { ProcessProxyConnection } from './connection.js'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
-import { platform } from 'os'
 import { readSocket } from './read-socket.js'
+import { getTargetArchs } from '../script/get-target-archs.mjs'
 
 const HANDSHAKE_PROTOCOL = 'ProcessProxy 0001 '
 const HANDSHAKE_PROTOCOL_LENGTH = 18
@@ -93,21 +93,38 @@ const ensureValidHandshake = async (
 }
 
 /**
- * Returns the absolute path to the native proxy executable.
- * Automatically adds the .exe suffix on Windows.
+ * Returns the absolute path to the native proxy executable suitable
+ * for the current platform and architecture.
  *
  * @returns The absolute path to the process-proxy executable
  */
-export function getProxyCommandPath(): string {
-  // Get the directory of this module
+export function getProxyCommandPath(
+  platform = process.platform,
+  arch = process.arch,
+): string {
   const moduleUrl = import.meta.url
   const modulePath = fileURLToPath(moduleUrl)
   const moduleDir = dirname(modulePath)
 
-  const baseName = `process-proxy-${process.platform}-${process.arch}`
-
-  // Navigate from dist/ to the project root, then to build/Release/
-  const executableName = platform() === 'win32' ? `${baseName}.exe` : baseName
+  const baseName = `process-proxy-${platform}-${arch}`
+  const executableName = platform === 'win32' ? `${baseName}.exe` : baseName
 
   return join(moduleDir, '..', 'bin', executableName)
+}
+
+export type ProxyCommandDetails = {
+  platform: string
+  arch: string
+  path: string
+}
+
+export const getAllProxyCommandPaths = (): ProxyCommandDetails[] => {
+  const platforms = ['darwin', 'win32', 'linux'] as const
+
+  return platforms.flatMap((platform) =>
+    getTargetArchs(platform).map((arch) => {
+      const path = getProxyCommandPath(platform, arch)
+      return { platform, arch, path }
+    }),
+  )
 }

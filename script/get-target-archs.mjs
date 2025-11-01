@@ -1,3 +1,7 @@
+/**
+ * @param {NodeJS.Platform} [platform] - The platform to get target architectures for
+ * @returns {NodeJS.Architecture[]} Array of supported architectures for the platform
+ */
 export const getTargetArchs = (platform = process.platform) => {
   if (platform === 'darwin') {
     return ['x64', 'arm64']
