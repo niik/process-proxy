@@ -6,6 +6,10 @@ on:
         description: 'Version to publish'
         default: 'minor'
         required: true
+      tag:
+        description: 'NPM tag to publish to'
+        default: 'latest'
+        required: true
       dry-run:
         description: 'Dry run (do not publish)'
         required: true
@@ -63,14 +67,14 @@ jobs:
       - name: Update npm to latest version
         run: npm install -g npm@latest
       - name: Publish package
-        run: npm publish ${{ github.event.inputs['dry-run'] == 'true' && '--dry-run' || '' }}
+        run: npm publish --tag ${{ github.event.inputs.tag }} ${{ github.event.inputs['dry-run'] == 'true' && '--dry-run' || '' }}
       - name: Publish tag
         run: git push origin HEAD --tags ${{ github.event.inputs['dry-run'] == 'true' && '--dry-run' || ''  }}
       - name: Create GitHub release
         if: ${{ github.event.inputs['dry-run'] != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $(git describe --tags --abbrev=0) --generate-notes
+        run: gh release create $(git describe --tags --abbrev=0) --generate-notes ${{ github.event.inputs.tag != 'latest' && '--latest=false' || '' }}
       - name: Upload package artifact
         uses: actions/upload-artifact@v5
         with:
