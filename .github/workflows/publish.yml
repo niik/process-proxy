@@ -66,6 +66,11 @@ jobs:
         run: npm publish ${{ github.event.inputs['dry-run'] == 'true' && '--dry-run' || '' }}
       - name: Publish tag
         run: git push origin HEAD --tags ${{ github.event.inputs['dry-run'] == 'true' && '--dry-run' || ''  }}
+      - name: Create GitHub release
+        if: ${{ github.event.inputs['dry-run'] != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $(git describe --tags --abbrev=0) --generate-notes
       - name: Upload package artifact
         uses: actions/upload-artifact@v5
         with:
