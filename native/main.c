@@ -642,16 +642,9 @@ static int handle_is_stdin_connected(socket_t sock) {
                 break;
             }
             case FILE_TYPE_PIPE: {
-                // Pipe - check if data is available or pipe is still open
+                // Pipe - PeekNamedPipe succeeds if pipe is open or has buffered data
                 DWORD bytes_available = 0;
-                if (PeekNamedPipe(hStdin, NULL, 0, NULL, &bytes_available, NULL)) {
-                    // Pipe is open
-                    connected = 1;
-                } else {
-                    // PeekNamedPipe failed - pipe may be closed, but check if data was available
-                    // (bytes_available would have been set before failure in some edge cases)
-                    connected = 0;
-                }
+                connected = PeekNamedPipe(hStdin, NULL, 0, NULL, &bytes_available, NULL) ? 1 : 0;
                 break;
             }
             case FILE_TYPE_DISK: {
