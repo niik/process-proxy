@@ -642,9 +642,16 @@ static int handle_is_stdin_connected(socket_t sock) {
                 break;
             }
             case FILE_TYPE_PIPE: {
-                // Pipe - PeekNamedPipe fails if writer closed
-                DWORD bytes_available;
-                connected = PeekNamedPipe(hStdin, NULL, 0, NULL, &bytes_available, NULL) ? 1 : 0;
+                // Pipe - check if data is available or pipe is still open
+                DWORD bytes_available = 0;
+                if (PeekNamedPipe(hStdin, NULL, 0, NULL, &bytes_available, NULL)) {
+                    // Pipe is open
+                    connected = 1;
+                } else {
+                    // PeekNamedPipe failed - pipe may be closed, but check if data was available
+                    // (bytes_available would have been set before failure in some edge cases)
+                    connected = 0;
+                }
                 break;
             }
             case FILE_TYPE_DISK: {
@@ -682,11 +689,14 @@ static int handle_is_stdin_connected(socket_t sock) {
             if (result < 0) {
                 // poll error - stdin not usable
                 connected = 0;
-            } else if (pfd.revents & (POLLHUP | POLLNVAL | POLLERR)) {
-                // Pipe closed, invalid fd, or error
+            } else if (pfd.revents & (POLLNVAL | POLLERR)) {
+                // Invalid fd or error - definitely not connected
+                connected = 0;
+            } else if ((pfd.revents & POLLHUP) && !(pfd.revents & POLLIN)) {
+                // Writer closed AND no data available - not connected
                 connected = 0;
             } else {
-                // stdin is connected (either has data or is waiting for input)
+                // Either: waiting for input, has data ready, or POLLHUP with data still buffered
                 connected = 1;
             }
         }
