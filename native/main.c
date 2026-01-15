@@ -754,12 +754,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Send handshake: "ProcessProxy 0001 " (18 bytes) + token (128 bytes) = 146 bytes total
+    // Send handshake: "ProcessProxy 0002 " (18 bytes) + token (128 bytes) = 146 bytes total
     char handshake[146];
     memset(handshake, 0, sizeof(handshake));
     
     // Copy protocol header (18 bytes including trailing space)
-    memcpy(handshake, "ProcessProxy 0001 ", 18);
+    memcpy(handshake, "ProcessProxy 0002 ", 18);
     
     // Get token from environment variable
     const char* token_env = getenv("PROCESS_PROXY_TOKEN");

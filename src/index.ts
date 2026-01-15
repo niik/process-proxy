@@ -6,7 +6,7 @@ import { dirname, join } from 'path'
 import { readSocket } from './read-socket.js'
 import { getTargetArchs } from '../script/get-target-archs.mjs'
 
-const HANDSHAKE_PROTOCOL = 'ProcessProxy 0001 '
+const HANDSHAKE_PROTOCOL = 'ProcessProxy 0002 '
 const HANDSHAKE_PROTOCOL_LENGTH = 18
 const HANDSHAKE_TOKEN_LENGTH = 128
 const HANDSHAKE_LENGTH = HANDSHAKE_PROTOCOL_LENGTH + HANDSHAKE_TOKEN_LENGTH // 146 bytes
