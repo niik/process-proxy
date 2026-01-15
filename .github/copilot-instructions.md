@@ -2,6 +2,12 @@
 
 This is a TypeScript/C hybrid npm package that enables developers to interact with native executables through TCP-based IPC. The native C executable connects to a Node.js TCP server, allowing bidirectional communication of stdin/stdout/stderr streams, environment variables, command line arguments, and process control.
 
+The main entry points are:
+
+- `native/main.c`: Cross-platform native executable (Windows/macOS/Linux)
+- `src/index.ts`: Exports `createProxyProcessServer` and `getProxyCommandPath`
+- `src/connection.ts`: Implements `ProcessProxyConnection` class handling protocol commands
+
 ## Code Standards
 
 ### Required Before Each Commit

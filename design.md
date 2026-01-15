@@ -38,9 +38,9 @@ The commands will include:
   - Payload: None
   - Response: 4-byte unsigned integer specifying the number of arguments, followed by each argument prefixed by a 4-byte unsigned integer specifying its length
 - `0x02`: Read from stdin
-  - Payload: 4-byte signed integer specifying the maximum number of bytes to read
+  - Payload: 4-byte unsigned integer specifying the maximum number of bytes to read (capped at 1MB)
   - Response: 4-byte signed integer specifying the number of bytes read, followed by the bytes read.
-  - Implementation: This should be non-blocking, returning 0 bytes read if no data is available and -1 if stdin is closed.
+  - Implementation: This should be non-blocking, returning 0 bytes read if no data is available and -1 if stdin is closed. The max_bytes parameter is capped at 1MB (1,048,576 bytes), in part because non-blocking reads can only return data already buffered by the OS and it's unlikely that the OS would buffer that much but also to ensure the response length can be represented with a signed 32-bit integer.
 - `0x03`: Write to stdout
   - Payload: 4-byte unsigned integer specifying the number of bytes to write, followed by the bytes to write
   - Response: None (only status code)

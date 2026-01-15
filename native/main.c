@@ -176,15 +176,23 @@ static int handle_get_args(socket_t sock) {
     return 0;
 }
 
+// Maximum allowed bytes for read_stdin (1MB) to ensure response fits in signed int32
+#define MAX_STDIN_READ_BYTES (1024 * 1024)
+
 static int handle_read_stdin(socket_t sock) {
-    int32_t max_bytes;
+    uint32_t max_bytes;
     
     // Read max_bytes parameter
     if (read_full(sock, &max_bytes, sizeof(max_bytes)) < 0) {
         return -1;
     }
     
-    if (max_bytes <= 0) {
+    // Cap at 1MB to ensure response fits in signed int32
+    if (max_bytes > MAX_STDIN_READ_BYTES) {
+        max_bytes = MAX_STDIN_READ_BYTES;
+    }
+    
+    if (max_bytes == 0) {
         // Send success with 0 bytes read
         if (send_success(sock) < 0) {
             return -1;
