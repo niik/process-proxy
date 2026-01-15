@@ -221,7 +221,7 @@ The TCP server only listens on localhost (127.0.0.1), but this does not provide 
 ProcessProxy includes a built-in authentication mechanism to validate connections during the handshake phase:
 
 1. When the native executable connects, it sends a 146-byte handshake containing:
-   - Protocol header: "ProcessProxy 0001 " (18 bytes)
+   - Protocol header: "ProcessProxy 0002 " (18 bytes)
    - Token: 128 bytes read from the `PROCESS_PROXY_TOKEN` environment variable
 
 2. The server validates this handshake and can optionally verify the token using a `validateConnection` callback

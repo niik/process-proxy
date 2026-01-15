@@ -15,6 +15,7 @@ const EXIT = 0x07
 const CLOSE_STDIN = 0x09
 const CLOSE_STDOUT = 0x0a
 const CLOSE_STDERR = 0x0b
+const IS_STDIN_CONNECTED = 0x0c
 
 type Command =
   | typeof GET_ARGS
@@ -27,6 +28,7 @@ type Command =
   | typeof CLOSE_STDIN
   | typeof CLOSE_STDOUT
   | typeof CLOSE_STDERR
+  | typeof IS_STDIN_CONNECTED
 
 type CommandOptions<T = void> = {
   onBeforeSend?: () => Promise<void>
@@ -217,5 +219,9 @@ export class ProcessProxyConnection extends EventEmitter {
         return Promise.reject(new Error('Connection already closed'))
       },
     })
+  }
+
+  public async isStdinConnected(): Promise<boolean> {
+    return this.invoke(IS_STDIN_CONNECTED, [], this.readInt32LE).then(Boolean)
   }
 }
