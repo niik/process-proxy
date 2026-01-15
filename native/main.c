@@ -19,10 +19,12 @@
     #define STDERR_FILENO 2
 #else
     #include <sys/socket.h>
+    #include <sys/stat.h>
     #include <arpa/inet.h>
     #include <unistd.h>
     #include <fcntl.h>
     #include <errno.h>
+    #include <poll.h>
     typedef int socket_t;
     #define INVALID_SOCKET_VALUE -1
     #define close_socket close
@@ -39,6 +41,7 @@
 #define CMD_CLOSE_STDIN 0x09
 #define CMD_CLOSE_STDOUT 0x0A
 #define CMD_CLOSE_STDERR 0x0B
+#define CMD_IS_STDIN_CONNECTED 0x0C
 
 // Global variables for argc and argv
 static int g_argc = 0;
@@ -619,6 +622,86 @@ static int handle_close_stderr(socket_t sock) {
     return send_success(sock);
 }
 
+static int handle_is_stdin_connected(socket_t sock) {
+    int32_t connected = 0;
+    
+#ifdef _WIN32
+    HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+    
+    // Check if handle is valid
+    if (hStdin == INVALID_HANDLE_VALUE || hStdin == NULL) {
+        connected = 0;
+    } else {
+        DWORD file_type = GetFileType(hStdin);
+        
+        switch (file_type) {
+            case FILE_TYPE_CHAR: {
+                // Console or NUL device - GetConsoleMode fails on NUL
+                DWORD mode;
+                connected = GetConsoleMode(hStdin, &mode) ? 1 : 0;
+                break;
+            }
+            case FILE_TYPE_PIPE: {
+                // Pipe - PeekNamedPipe fails if writer closed
+                DWORD bytes_available;
+                connected = PeekNamedPipe(hStdin, NULL, 0, NULL, &bytes_available, NULL) ? 1 : 0;
+                break;
+            }
+            case FILE_TYPE_DISK: {
+                // Regular file - check if handle is valid
+                BY_HANDLE_FILE_INFORMATION info;
+                connected = GetFileInformationByHandle(hStdin, &info) ? 1 : 0;
+                break;
+            }
+            default:
+                connected = 0;
+                break;
+        }
+    }
+#else
+    // First check if stdin fd is valid using fstat
+    struct stat stdin_stat;
+    if (fstat(STDIN_FILENO, &stdin_stat) < 0) {
+        connected = 0;
+    } else {
+        // Check if stdin is /dev/null by comparing device and inode
+        struct stat devnull_stat;
+        if (stat("/dev/null", &devnull_stat) == 0 &&
+            stdin_stat.st_dev == devnull_stat.st_dev &&
+            stdin_stat.st_ino == devnull_stat.st_ino) {
+            connected = 0;
+        } else {
+            // Use poll to check if stdin is connected (non-blocking, non-consuming)
+            struct pollfd pfd;
+            pfd.fd = STDIN_FILENO;
+            pfd.events = POLLIN;
+            pfd.revents = 0;
+            
+            int result = poll(&pfd, 1, 0);
+            
+            if (result < 0) {
+                // poll error - stdin not usable
+                connected = 0;
+            } else if (pfd.revents & (POLLHUP | POLLNVAL | POLLERR)) {
+                // Pipe closed, invalid fd, or error
+                connected = 0;
+            } else {
+                // stdin is connected (either has data or is waiting for input)
+                connected = 1;
+            }
+        }
+    }
+#endif
+    
+    // Send success status
+    if (send_success(sock) < 0) {
+        return -1;
+    }
+    
+    // Send connected status
+    return write_full(sock, &connected, sizeof(connected));
+}
+
 int main(int argc, char* argv[]) {
     g_argc = argc;
     g_argv = argv;
@@ -741,6 +824,9 @@ int main(int argc, char* argv[]) {
                 break;
             case CMD_CLOSE_STDERR:
                 handler_result = handle_close_stderr(g_socket);
+                break;
+            case CMD_IS_STDIN_CONNECTED:
+                handler_result = handle_is_stdin_connected(g_socket);
                 break;
             default:
                 // Unknown command, close connection

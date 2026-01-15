@@ -65,6 +65,10 @@ The commands will include:
 - `0x0B`: Close stderr
   - Payload: None
   - Response: None (only status code)
+- `0x0C`: Check if stdin is connected
+  - Payload: None
+  - Response: 4-byte signed integer (1 if stdin is connected and usable, 0 if stdin is disconnected, redirected to /dev/null, or otherwise unusable)
+  - Implementation: Non-blocking and non-consuming check. On POSIX, uses poll() and compares against /dev/null's device/inode. On Windows, uses GetFileType() with GetConsoleMode() for console handles, PeekNamedPipe() for pipes, and GetFileInformationByHandle() for files.
 
 ## TypeScript library
 
