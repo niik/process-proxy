@@ -13,7 +13,7 @@ This is a TypeScript/C hybrid npm package that enables developers to interact wi
 ### Development Flow
 
 - **Build everything**: `npm run build` (builds native C executable + TypeScript)
-- **Build native only**: `npm run build:native`
+- **Build native only**: `npm run build:native` (use `npm run build:native -- --rebuild` to force rebuild)
 - **Build TypeScript only**: `npm run build:ts`
 - **Run tests**: `npm test`
 - **Check formatting**: `npm run lint`
