@@ -5,6 +5,7 @@ import {
   spawnNativeProcess,
   waitForExit,
   delay,
+  collectOutput,
   createConnectionHandler,
 } from './helpers.js'
 
@@ -128,6 +129,30 @@ describe('Basic Connection', () => {
     const exitCode = await waitForExit(child)
 
     assert.strictEqual(exitCode, 99, 'exit code should be 99')
+
+    await testServer.close()
+  })
+
+  it('should exit with code 1 and error message when connection is closed unexpectedly', async () => {
+    const testServer = await createTestServer((connection) => {
+      // Destroy the underlying socket without sending an exit command
+      connection.socket.destroy()
+    })
+    const child = spawnNativeProcess(testServer.port)
+
+    const stderrPromise = collectOutput(child.stderr!)
+    const exitCode = await waitForExit(child)
+    const stderr = await stderrPromise
+
+    assert.strictEqual(
+      exitCode,
+      1,
+      'exit code should be 1 on unexpected disconnect',
+    )
+    assert.ok(
+      stderr.includes('Connection to proxy server lost unexpectedly'),
+      `stderr should contain disconnect error message, got: ${stderr}`,
+    )
 
     await testServer.close()
   })

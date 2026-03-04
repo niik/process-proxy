@@ -842,11 +842,12 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    // Cleanup
+    // Connection was closed unexpectedly (clean exit goes through CMD_EXIT)
+    fprintf(stderr, "Error: Connection to proxy server lost unexpectedly\n");
     close_socket(g_socket);
 #ifdef _WIN32
     WSACleanup();
 #endif
     
-    return 0;
+    return 1;
 }
